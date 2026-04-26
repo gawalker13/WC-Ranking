@@ -10,6 +10,8 @@ import feedparser
 import re
 from html import unescape
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 # -------------------------------------------------
 # PAGE CONFIG
 # -------------------------------------------------
