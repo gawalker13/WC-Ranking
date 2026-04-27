@@ -1123,8 +1123,8 @@ with tab1:
         # Try multiple feeds in case one is blocked by the host
         news_items = []
         feeds_to_try = [
-            #"https://www.espn.com/espn/rss/soccer/news",
-            #"https://feeds.bbci.co.uk/sport/football/rss.xml",
+            "https://www.espn.com/espn/rss/soccer/news",
+            "https://feeds.bbci.co.uk/sport/football/rss.xml",
             "https://www.theguardian.com/football/rss",
         ]
         for feed_url in feeds_to_try:
