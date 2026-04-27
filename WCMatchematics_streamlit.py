@@ -1120,26 +1120,45 @@ with tab1:
     with news_col:
         st.markdown('<div class="section-header">RECENT NEWS</div>', unsafe_allow_html=True)
 
-        feed = feedparser.parse("https://www.espn.com/espn/rss/soccer/news")
+        # Try multiple feeds in case one is blocked by the host
+        news_items = []
+        feeds_to_try = [
+            "https://feeds.bbci.co.uk/sport/football/rss.xml",
+            "https://www.theguardian.com/football/rss",
+            "https://www.espn.com/espn/rss/soccer/news",
+        ]
+        for feed_url in feeds_to_try:
+            try:
+                feed = feedparser.parse(feed_url)
+                if feed.entries:
+                    news_items = feed.entries[:8]
+                    break
+            except Exception:
+                continue
 
-        # container background
-        st.markdown('<div style="background:#0a0a0f;padding:12px;border-radius:6px;">', unsafe_allow_html=True)
-
-        for entry in feed.entries[:8]:
-            title = clean_html(entry.title)
-
+        if not news_items:
             st.markdown(
-                f"""
-                <a href="{entry.link}" target="_blank"
-                    style="display:block;margin-bottom:12px;color:#e6e6e6;
-                        font-size:0.85rem;text-decoration:none;">
-                    {title}
-                </a>
-                """,
+                '<div style="color:#555;font-size:0.82rem;padding:8px 0;">News unavailable — RSS feed could not be reached from this server.</div>',
                 unsafe_allow_html=True
             )
-
-        st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            # Build the whole block as one HTML string so open/close divs stay together
+            links_html = ""
+            for entry in news_items:
+                title = unescape(re.sub('<.*?>', '', entry.get("title", "")))
+                link  = entry.get("link", "#")
+                links_html += (
+                    f'<a href="{link}" target="_blank" rel="noopener noreferrer" '
+                    f'style="display:block;margin-bottom:14px;color:#e6e6e6;'
+                    f'font-size:0.83rem;text-decoration:none;line-height:1.4;'
+                    f'border-bottom:1px solid #1a1a2e;padding-bottom:10px;">'
+                    f'{title}'
+                    f'</a>'
+                )
+            st.markdown(
+                f'<div style="background:#0a0a0f;padding:12px;border-radius:6px;">{links_html}</div>',
+                unsafe_allow_html=True
+            )
 
 # ── GROUPS TAB ───────────────────────────────────
 with tab2:
