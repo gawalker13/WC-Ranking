@@ -1130,10 +1130,9 @@ with tab1:
         for feed_url in feeds_to_try:
             try:
                 feed = feedparser.parse(
-                    "https://www.espn.com/espn/rss/soccer/news",
+                    feed_url,
                     request_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                 )
-                feed = feedparser.parse(feed_url)
                 if feed.entries:
                     news_items = feed.entries[:8]
                     break
