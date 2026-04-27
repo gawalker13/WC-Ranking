@@ -1129,6 +1129,10 @@ with tab1:
         ]
         for feed_url in feeds_to_try:
             try:
+                feed = feedparser.parse(
+                    "https://www.espn.com/espn/rss/soccer/news",
+                    request_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                )
                 feed = feedparser.parse(feed_url)
                 if feed.entries:
                     news_items = feed.entries[:8]
@@ -1142,7 +1146,6 @@ with tab1:
                 unsafe_allow_html=True
             )
         else:
-            # Build the whole block as one HTML string so open/close divs stay together
             links_html = ""
             for entry in news_items:
                 title = unescape(re.sub('<.*?>', '', entry.get("title", "")))
