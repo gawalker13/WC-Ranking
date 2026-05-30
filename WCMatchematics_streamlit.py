@@ -13,6 +13,25 @@ from html import unescape
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 st.cache_data.clear()
 
+# Load shootout data
+try:
+    _shootouts_df = pd.read_csv("shootouts.csv", parse_dates=["date"])
+    _shootouts_df["home_team"] = _shootouts_df["home_team"].astype(str).str.strip()
+    _shootouts_df["away_team"] = _shootouts_df["away_team"].astype(str).str.strip()
+    _shootouts_df["winner"]    = _shootouts_df["winner"].astype(str).str.strip()
+    SHOOTOUT_SET = set(
+        zip(_shootouts_df["date"].dt.date,
+            _shootouts_df["home_team"],
+            _shootouts_df["away_team"])
+    )
+    SHOOTOUT_WINNER = {
+        (row.date.date(), row.home_team, row.away_team): row.winner
+        for row in _shootouts_df.itertuples()
+    }
+except FileNotFoundError:
+    SHOOTOUT_SET   = set()
+    SHOOTOUT_WINNER = {}
+
 # -------------------------------------------------
 # PAGE CONFIG
 # -------------------------------------------------
@@ -525,6 +544,17 @@ def run_simulation(start_date, end_date, burnin_years, home_adv, decay_rate, reg
             ch = K * (W - We)
             elo[t1] += ch
             elo[t2] -= ch
+            # Penalty shootout: apply a reduced extra delta for the winner
+            pso_key = (row.date.date(), row.home_team, row.away_team)
+            if pso_key in SHOOTOUT_SET and s1 == s2:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                pso_K = K * 0.3  # 30% of the normal K — tune this
+                if pso_winner == row.home_team:
+                    elo[t1] += pso_K * (1 - We)
+                    elo[t2] -= pso_K * (1 - We)
+                elif pso_winner == row.away_team:
+                    elo[t1] -= pso_K * We
+                    elo[t2] += pso_K * We
             if track:
                 date_str = str(row.date)[:10]
                 res_h = "W" if s1 > s2 else ("D" if s1 == s2 else "L")
@@ -849,6 +879,16 @@ def run_massey(start_date, end_date, burnin_years,
 
         b[t1] += w * delta
         b[t2] -= w * delta
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        if pso_key in SHOOTOUT_SET and s1 == s2:
+            pso_winner = SHOOTOUT_WINNER.get(pso_key)
+            pso_boost  = w * pso_val * 0.5  # half a goal equivalent
+            if pso_winner == row.home_team:
+                b[t1] += pso_boost
+                b[t2] -= pso_boost
+            elif pso_winner == row.away_team:
+                b[t2] += pso_boost
+                b[t1] -= pso_boost
 
     # Replace last row with sum = 0 constraint
     M[-1] = np.ones(n)
@@ -915,7 +955,6 @@ def run_colley(start_date, end_date, burnin_years,
     last_date     = display_games["date"].max()
     start_date_dt = display_games["date"].min()
     date_gap      = max((last_date - start_date_dt).days, 1)
-    pso_deflate   = 1.0 - 2.0 * pso_weight
 
     if weighting == "Log":
         A_log = (-years_back) / (years50 - years95) * math.log(0.95 / 0.05)
@@ -967,13 +1006,26 @@ def run_colley(start_date, end_date, burnin_years,
         C[t1][t1] += w
         C[t2][t2] += w
 
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
+
         if s1 > s2:
             b[t1] += w / 2.0
             b[t2] -= w / 2.0
         elif s1 < s2:
             b[t2] += w / 2.0
             b[t1] -= w / 2.0
-        # draws: no change (treat as 0.5 win each, cancels out)
+        else:
+            if is_pso:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                pso_credit = (w * pso_weight) / 2.0
+                if pso_winner == row.home_team:
+                    b[t1] += pso_credit
+                    b[t2] -= pso_credit
+                elif pso_winner == row.away_team:
+                    b[t2] += pso_credit
+                    b[t1] -= pso_credit
+            # pure draw: no change
 
     try:
         r = np.linalg.solve(C, b)
@@ -1644,4 +1696,3 @@ with tab4:
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="footer"> <div style="text-align:center"> <small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
-
