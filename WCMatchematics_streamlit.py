@@ -366,19 +366,22 @@ with st.sidebar:
 
         if massey_weighting == "Linear":
             massey_linear_first = st.slider("Weight of oldest game", 0.0, 1.0, 0.2, step=0.05, key="m_lf")
-            massey_linear_last  = st.slider("Weight of newest game", 0.0, 1.0, 0.7, step=0.05, key="m_ll")
+            massey_linear_last  = st.slider("Weight of newest game", 0.0, 1.0, 1.0, step=0.05, key="m_ll")
         else:
             massey_linear_first = 0.2
-            massey_linear_last  = 0.7
+            massey_linear_last  = 1.0
 
-        massey_max_score = st.slider("Max score difference cap", 1, 20, 10, key="m_maxsc")
+        massey_max_score = st.slider("Max score difference cap", 1, 100, 15, key="m_maxsc")
+
+        massey_pso = st.slider("Penalty shootout weight", 0.0, 0.5, 0.33, step=0.01, key="m_pso",
+                                help="0 = draws treated equally, 0.5 = PSO counts as full win/loss")
 
         st.markdown("##### Tournament weights")
         with st.expander("Adjust weights", expanded=False):
             m_wt_friendly    = st.number_input("Friendly",             value=1.0, step=0.5, key="m_wf")
             m_wt_cont_qual   = st.number_input("Continental Qual.",    value=2.5, step=0.5, key="m_wcq2")
             m_wt_wcq         = st.number_input("World Cup Qual.",      value=2.5, step=0.5, key="m_wcq")
-            m_wt_conf_cup    = st.number_input("Nations League",   value=2.5, step=0.5, key="m_cc") 
+            m_wt_conf_cup    = st.number_input("Confed. Cup",        value=3.0, step=0.5, key="m_cc") 
             m_wt_cont_final  = st.number_input("Continental Final",    value=3.0, step=0.5, key="m_cf")
             m_wt_wc_final    = st.number_input("World Cup",            value=4.0, step=0.5, key="m_wcf")
 
@@ -403,7 +406,7 @@ with st.sidebar:
             colley_linear_first = 0.2
             colley_linear_last  = 1.0
 
-        colley_pso = st.slider("Penalty shootout weight", 0.0, 0.5, 0.3, step=0.05, key="c_pso",
+        colley_pso = st.slider("Penalty shootout weight", 0.0, 0.5, 0.33, step=0.01, key="c_pso",
                                 help="0 = draws treated equally, 0.5 = PSO counts as full win/loss")
 
         st.markdown("##### Tournament weights")
@@ -426,7 +429,7 @@ with st.sidebar:
 
 
 def get_logo_html(height="60px"):
-    logo_path = "IMG_3453.png"  ####### change this filename #########
+    logo_path = "match-matics-logo-inverted-rgb-749px@72ppi.png"  ####### change this filename #########
     if not os.path.exists(logo_path):
         return ""
     with open(logo_path, "rb") as f:
@@ -442,7 +445,7 @@ def get_logo_html(height="60px"):
 # SPLASH SCREEN
 # -------------------------------------------------
 if not run_btn and "sim_results" not in st.session_state:
-    st.markdown(get_logo_html("80px"), unsafe_allow_html=True)
+    st.markdown(get_logo_html("120px"), unsafe_allow_html=True)
     st.markdown('<div class="main-title">WORLD CUP MATCH-MATICS</div>', unsafe_allow_html=True)
     st.markdown('<div class="main-subtitle">World Cup Rating Simulator — configure settings and press Run</div>',
                 unsafe_allow_html=True)
@@ -794,7 +797,7 @@ def run_massey(start_date, end_date, burnin_years,
 
     all_games["home_team"]  = all_games["home_team"].astype(str).str.strip()
     all_games["away_team"]  = all_games["away_team"].astype(str).str.strip()
-    all_games["tournament"] = all_games["tournament"].astype(str).str.lower().str.strip()
+    all_games["tournament"] = all_games["tournament"].astype(str).str.strip()
     all_games["neutral"]    = all_games["neutral"].astype(str).str.lower().isin(["true", "1"])
     all_games["home_score"] = pd.to_numeric(all_games["home_score"], errors="coerce")
     all_games["away_score"] = pd.to_numeric(all_games["away_score"], errors="coerce")
@@ -812,13 +815,13 @@ def run_massey(start_date, end_date, burnin_years,
     if show_games.empty:
         return None
 
-    all_teams   = sorted(set(display_games["home_team"]) | set(display_games["away_team"]))
+    all_teams   = sorted(set(show_games["home_team"]) | set(show_games["away_team"]))
     team_to_idx = {t: i for i, t in enumerate(all_teams)}
     n           = len(all_teams)
 
-    last_date  = display_games["date"].max()
-    start_date_dt = display_games["date"].min()
-    date_gap   = max((last_date - start_date_dt).days, 1)
+    last_date     = show_games["date"].max()
+    start_date_dt = show_games["date"].min()
+    date_gap      = max((last_date - start_date_dt).days, 1)
 
     # --- Age weighting function ---
     if weighting == "Log":
@@ -833,24 +836,111 @@ def run_massey(start_date, end_date, burnin_years,
         def age_weight(x):
             return 1.0
 
-    # --- Tournament type → weight ---
+    # --- Tournament classification map (matches fifaMassey notebook) ---
+    _TOURNAMENT_TYPE_MAP = {
+        "FIFA World Cup":                          "wc_final",
+        "FIFA World Cup qualification":            "wcq",
+        "Friendly":                                "friendly",
+        "FIFA Series":                             "friendly",
+        "Canadian Shield":                         "friendly",
+        "CONCACAF Series":                         "friendly",
+        "Kirin Challenge Cup":                     "friendly",
+        "Kirin Cup":                               "friendly",
+        "Al Ain International Cup":                "friendly",
+        "Jordan International Tournament":         "friendly",
+        "King's Cup":                              "friendly",
+        "MSG Prime Minister's Cup":                "friendly",
+        "Mauritius Four Nations Cup":              "friendly",
+        "Mukuru 4 Nations":                        "friendly",
+        "Morocco, Capital of African Football":    "friendly",
+        "Tri Nation Tournament":                   "friendly",
+        "Tri-Nations Series":                      "friendly",
+        "Unity Cup":                               "friendly",
+        "Indian Ocean Island Games":               "friendly",
+        "Island Games":                            "friendly",
+        "Pacific Games":                           "friendly",
+        "Mapinduzi Cup":                           "friendly",
+        "Marianas Cup":                            "friendly",
+        "Muratti Vase":                            "friendly",
+        "Navruz Cup":                              "friendly",
+        "Outrigger Challenge Cup":                 "friendly",
+        "Soccer Ashes":                            "friendly",
+        "South Asian Super Cup":                   "friendly",
+        "CONIFA Africa Football Cup":              "friendly",
+        "CONIFA Asia Cup":                         "friendly",
+        "CONIFA South America Football Cup":       "friendly",
+        "CONIFA World Football Cup qualification": "friendly",
+        "Merdeka Tournament":                      "friendly",
+        "UEFA Euro":                               "cont_final",
+        "Copa América":                            "cont_final",
+        "African Cup of Nations":                  "cont_final",
+        "AFC Asian Cup":                           "cont_final",
+        "Gold Cup":                                "cont_final",
+        "Oceania Nations Cup":                     "cont_final",
+        "AFF Championship":                        "cont_final",
+        "ASEAN Championship":                      "cont_final",
+        "EAFF Championship":                       "cont_final",
+        "SAFF Cup":                                "cont_final",
+        "Gulf Cup":                                "cont_final",
+        "COSAFA Cup":                              "cont_final",
+        "CAFA Nations Cup":                        "cont_final",
+        "Baltic Cup":                              "cont_final",
+        "Arab Cup":                                "cont_final",
+        "UEFA Nations League":                     "cont_final",
+        "CONCACAF Nations League":                 "cont_final",
+        "UEFA Euro qualification":                 "cont_qual",
+        "AFC Asian Cup qualification":             "cont_qual",
+        "African Cup of Nations qualification":    "cont_qual",
+        "Gold Cup qualification":                  "cont_qual",
+        "Oceania Nations Cup qualification":       "cont_qual",
+        "AFF Championship qualification":          "cont_qual",
+        "ASEAN Championship qualification":        "cont_qual",
+        "EAFF Championship qualification":         "cont_qual",
+        "Arab Cup qualification":                  "cont_qual",
+        "Copa América qualification":              "cont_qual",
+        "FIFA Confederations Cup":                 "cont_final",
+        "CONMEBOL–UEFA Cup of Champions":          "cont_final",
+        "Intercontinental Cup":                    "cont_final",
+    }
+
     def get_tournament_weight(tournament):
-        t = tournament
-        if "friendly" in t:                                              return wt_friendly
-        if "fifa world cup" in t and "qualification" not in t:           return wt_wc_final
-        if "copa america" in t or "uefa euro" in t or "african cup" in t \
-           or "gold cup" in t or "asian cup" in t:
-            if "qualification" not in t:                                 return wt_cont_final
-        if "world cup qualification" in t:                               return wt_wcq
-        if "qualification" in t:                                         return wt_cont_qual
-        if "confederations cup" in t or "nations league" in t:           return wt_conf_cup #confed cup doesn't exist anymore
+        # Notebook uses original-case exact match; tournament names are NOT
+        # lowercased in run_massey so this works directly.
+        typ = _TOURNAMENT_TYPE_MAP.get(tournament)
+        if typ == "wc_final":    return wt_wc_final
+        if typ == "wcq":         return wt_wcq
+        if typ == "cont_final":  return wt_cont_final
+        if typ == "cont_qual":   return wt_cont_qual
+        if typ == "conf_cup":    return wt_conf_cup
+        if typ == "friendly":    return wt_friendly
+        # Unclassified → same as Friendly (matches notebook's Unclassified = 1)
         return wt_friendly
+
+    # --- Filter to main connected component (matches notebook) ---
+    import networkx as nx
+    G = nx.Graph()
+    G.add_nodes_from(all_teams)
+    for row in show_games.itertuples():
+        if row.home_team in team_to_idx and row.away_team in team_to_idx:
+            G.add_edge(row.home_team, row.away_team)
+    components = list(nx.connected_components(G))
+    main_component = max(components, key=len)
+    show_games = show_games[
+        show_games["home_team"].isin(main_component) &
+        show_games["away_team"].isin(main_component)
+    ].copy()
+    all_teams   = sorted(main_component)
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
+
+    # --- PSO deflation factor (matches notebook) ---
+    pso_deflate = 1.0 - 2.0 * pso_val
 
     # --- Build Massey matrix ---
     M = np.zeros((n, n))
     b = np.zeros(n)
 
-    for row in display_games.itertuples():
+    for row in show_games.itertuples():
         t1 = team_to_idx.get(row.home_team, -1)
         t2 = team_to_idx.get(row.away_team, -1)
         if t1 < 0 or t2 < 0:
@@ -865,30 +955,35 @@ def run_massey(start_date, end_date, burnin_years,
         s1 = int(row.home_score)
         s2 = int(row.away_score)
 
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
+
+        # Deflate weight for PSO games before updating matrix and b vector
+        if is_pso:
+            w *= pso_deflate
+
         M[t1][t2] -= w
         M[t2][t1] -= w
         M[t1][t1] += w
         M[t2][t2] += w
 
-        if s1 > s2:
-            delta = min(s1 - s2, max_score_diff)
-        elif s1 < s2:
-            delta = max(s1 - s2, -max_score_diff)
-        else:
-            delta = 0.0
+        point_diff = min(abs(s1 - s2), max_score_diff)
 
-        b[t1] += w * delta
-        b[t2] -= w * delta
-        pso_key = (row.date.date(), row.home_team, row.away_team)
-        if pso_key in SHOOTOUT_SET and s1 == s2:
-            pso_winner = SHOOTOUT_WINNER.get(pso_key)
-            pso_boost  = w * pso_val * 0.5  # half a goal equivalent
-            if pso_winner == row.home_team:
-                b[t1] += pso_boost
-                b[t2] -= pso_boost
-            elif pso_winner == row.away_team:
-                b[t2] += pso_boost
-                b[t1] -= pso_boost
+        if s1 > s2:
+            b[t1] += w * point_diff
+            b[t2] -= w * point_diff
+        elif s1 < s2:
+            b[t2] += w * point_diff
+            b[t1] -= w * point_diff
+        else:
+            if is_pso:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                if pso_winner == row.home_team:
+                    b[t1] += w
+                    b[t2] -= w
+                elif pso_winner == row.away_team:
+                    b[t2] += w
+                    b[t1] -= w
 
     # Replace last row with sum = 0 constraint
     M[-1] = np.ones(n)
@@ -899,19 +994,11 @@ def run_massey(start_date, end_date, burnin_years,
     except np.linalg.LinAlgError:
         r = np.zeros(n)
 
-    try:
-        r = np.linalg.solve(M, b)
-    except np.linalg.LinAlgError:
-        try:
-            r = np.linalg.lstsq(M, b, rcond=None)[0]
-        except Exception:
-            r = np.zeros(n)
-   
     ratings = {team: float(r[team_to_idx[team]])
                for team in all_teams}
 
     result = _build_bracket_result(ratings, all_teams, show_games)
-    result["burnin_count"] = len(display_games) - len(show_games)
+    result["burnin_count"] = 0
     return result
 
 
@@ -948,12 +1035,12 @@ def run_colley(start_date, end_date, burnin_years,
     if show_games.empty:
         return None
 
-    all_teams   = sorted(set(display_games["home_team"]) | set(display_games["away_team"]))
+    all_teams   = sorted(set(show_games["home_team"]) | set(show_games["away_team"]))
     team_to_idx = {t: i for i, t in enumerate(all_teams)}
     n           = len(all_teams)
 
-    last_date     = display_games["date"].max()
-    start_date_dt = display_games["date"].min()
+    last_date     = show_games["date"].max()
+    start_date_dt = show_games["date"].min()
     date_gap      = max((last_date - start_date_dt).days, 1)
 
     if weighting == "Log":
@@ -968,8 +1055,98 @@ def run_colley(start_date, end_date, burnin_years,
         def age_weight(x):
             return 1.0
 
+    # Detailed tournament classification map (from fifaColley notebook).
+    # Keys are lowercased to match how the streamlit normalises tournament names.
+    _TOURNAMENT_TYPE_MAP = {
+        # World Cup
+        "fifa world cup":                         "wc_final",
+        "fifa world cup qualification":           "wcq",
+        # Friendlies
+        "friendly":                               "friendly",
+        "fifa series":                            "friendly",
+        "canadian shield":                        "friendly",
+        "concacaf series":                        "friendly",
+        "kirin challenge cup":                    "friendly",
+        "kirin cup":                              "friendly",
+        "al ain international cup":               "friendly",
+        "jordan international tournament":        "friendly",
+        "king's cup":                             "friendly",
+        "msg prime minister's cup":               "friendly",
+        "mauritius four nations cup":             "friendly",
+        "mukuru 4 nations":                       "friendly",
+        "morocco, capital of african football":   "friendly",
+        "tri nation tournament":                  "friendly",
+        "tri-nations series":                     "friendly",
+        "unity cup":                              "friendly",
+        "indian ocean island games":              "friendly",
+        "island games":                           "friendly",
+        "pacific games":                          "friendly",
+        "mapinduzi cup":                          "friendly",
+        "marianas cup":                           "friendly",
+        "muratti vase":                           "friendly",
+        "navruz cup":                             "friendly",
+        "outrigger challenge cup":                "friendly",
+        "soccer ashes":                           "friendly",
+        "south asian super cup":                  "friendly",
+        "conifa africa football cup":             "friendly",
+        "conifa asia cup":                        "friendly",
+        "conifa south america football cup":      "friendly",
+        "conifa world football cup qualification":"friendly",
+        "merdeka tournament":                     "friendly",
+        # Continental championships
+        "uefa euro":                              "cont_final",
+        "copa américa":                           "cont_final",
+        "african cup of nations":                 "cont_final",
+        "afc asian cup":                          "cont_final",
+        "gold cup":                               "cont_final",
+        "oceania nations cup":                    "cont_final",
+        "aff championship":                       "cont_final",
+        "asean championship":                     "cont_final",
+        "eaff championship":                      "cont_final",
+        "saff cup":                               "cont_final",
+        "gulf cup":                               "cont_final",
+        "cosafa cup":                             "cont_final",
+        "cafa nations cup":                       "cont_final",
+        "baltic cup":                             "cont_final",
+        "arab cup":                               "cont_final",
+        "uefa nations league":                    "cont_final",
+        "concacaf nations league":                "cont_final",
+        # Qualifiers
+        "uefa euro qualification":                "cont_qual",
+        "afc asian cup qualification":            "cont_qual",
+        "african cup of nations qualification":   "cont_qual",
+        "gold cup qualification":                 "cont_qual",
+        "oceania nations cup qualification":      "cont_qual",
+        "aff championship qualification":         "cont_qual",
+        "asean championship qualification":       "cont_qual",
+        "eaff championship qualification":        "cont_qual",
+        "arab cup qualification":                 "cont_qual",
+        "copa america qualification":             "cont_qual",
+        # Historical FIFA / Intercontinental
+        "fifa confederations cup":                "cont_final",
+        "conmebol–uefa cup of champions":         "cont_final",
+        "intercontinental cup":                   "cont_final",
+    }
+
     def get_tournament_weight(tournament):
-        t = tournament
+        """Map a (lowercased) tournament name to a weight.
+
+        Uses the notebook's explicit map first (exact match on the normalised
+        name), then falls back to the existing substring heuristics so that
+        any tournament not listed above still gets a reasonable weight.
+        """
+        t = tournament  # already lowercased by the data-prep step above
+
+        # 1. Exact-match lookup from the notebook's detailed map
+        typ = _TOURNAMENT_TYPE_MAP.get(t)
+        if typ == "wc_final":    return wt_wc_final
+        if typ == "wcq":         return wt_wcq
+        if typ == "cont_final":  return wt_cont_final
+        if typ == "cont_qual":   return wt_cont_qual
+        if typ == "conf_cup":    return wt_conf_cup
+        if typ == "friendly":    return wt_friendly
+
+        # 2. Substring fallback (handles variants / new tournaments not in map)
         if "friendly" in t:                                              return wt_friendly
         if "fifa world cup" in t and "qualification" not in t:           return wt_wc_final
         if "copa america" in t or "uefa euro" in t or "african cup" in t \
@@ -977,16 +1154,37 @@ def run_colley(start_date, end_date, burnin_years,
             if "qualification" not in t:                                 return wt_cont_final
         if "world cup qualification" in t:                               return wt_wcq
         if "qualification" in t:                                         return wt_cont_qual
-        if "confederations cup" in t or "nations league" in t:           return wt_conf_cup #confed cup doesn't exist anymore
-        return wt_friendly
+        if "confederations cup" in t or "nations league" in t:           return wt_conf_cup
+        return wt_friendly  # unknown tournaments treated as friendlies
+    
+    # --- Filter to main connected component (matches notebook) ---
+    import networkx as nx
+    G = nx.Graph()
+    G.add_nodes_from(all_teams)
+    for row in show_games.itertuples():
+        if row.home_team in team_to_idx and row.away_team in team_to_idx:
+            G.add_edge(row.home_team, row.away_team)
+    components = list(nx.connected_components(G))
+    main_component = max(components, key=len)
+    show_games = show_games[
+        show_games["home_team"].isin(main_component) &
+        show_games["away_team"].isin(main_component)
+    ].copy()
+    all_teams   = sorted(main_component)
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
 
     # --- Build Colley matrix ---
+    # PSOdeflate mirrors the notebook: a PSO game's weight is scaled down
+    # to reflect reduced certainty, then win/loss credit applied normally.
+    pso_deflate = 1.0 - 2.0 * pso_weight
+
     C = np.zeros((n, n))
     for i in range(n):
         C[i][i] = 2.0
     b = np.ones(n)
 
-    for row in display_games.itertuples():
+    for row in show_games.itertuples():
         t1 = team_to_idx.get(row.home_team, -1)
         t2 = team_to_idx.get(row.away_team, -1)
         if t1 < 0 or t2 < 0:
@@ -1001,13 +1199,17 @@ def run_colley(start_date, end_date, burnin_years,
         s1 = int(row.home_score)
         s2 = int(row.away_score)
 
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
+
+        # Deflate weight for PSO games before updating matrix and b vector
+        if is_pso:
+            w *= pso_deflate
+
         C[t1][t2] -= w
         C[t2][t1] -= w
         C[t1][t1] += w
         C[t2][t2] += w
-
-        pso_key = (row.date.date(), row.home_team, row.away_team)
-        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
 
         if s1 > s2:
             b[t1] += w / 2.0
@@ -1018,14 +1220,13 @@ def run_colley(start_date, end_date, burnin_years,
         else:
             if is_pso:
                 pso_winner = SHOOTOUT_WINNER.get(pso_key)
-                pso_credit = (w * pso_weight) / 2.0
                 if pso_winner == row.home_team:
-                    b[t1] += pso_credit
-                    b[t2] -= pso_credit
+                    b[t1] += w / 2.0
+                    b[t2] -= w / 2.0
                 elif pso_winner == row.away_team:
-                    b[t2] += pso_credit
-                    b[t1] -= pso_credit
-            # pure draw: no change
+                    b[t2] += w / 2.0
+                    b[t1] -= w / 2.0
+            # pure draw: no change to b
 
     try:
         r = np.linalg.solve(C, b)
@@ -1056,7 +1257,7 @@ if run_btn:
                 massey_weighting, massey_years_back, massey_years95, massey_years50,
                 m_wt_friendly, m_wt_cont_qual, m_wt_wcq, m_wt_conf_cup,
                 m_wt_cont_final, m_wt_wc_final,
-                massey_max_score, 0.3,
+                massey_max_score, massey_pso,
                 massey_linear_first, massey_linear_last
             )
         elif rating_system == "Colley":
@@ -1088,7 +1289,7 @@ f1, f2, fw    = result["final"]
 # -------------------------------------------------
 # PAGE HEADER
 # -------------------------------------------------
-st.markdown(get_logo_html("60px"), unsafe_allow_html=True)
+st.markdown(get_logo_html("120px"), unsafe_allow_html=True)
 st.markdown('<div class="main-title">WORLD CUP MATCH-MATICS</div>', unsafe_allow_html=True)
 st.markdown(
     f'<div class="main-subtitle">{start_date} → {end_date}'
