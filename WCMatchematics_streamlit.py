@@ -321,7 +321,7 @@ with st.sidebar:
         end_date = st.date_input("End", value=pd.to_datetime("2025-12-31"),
                                  min_value=pd.to_datetime("1990-01-01"))
 
-    burnin_years = st.slider("Burn-in period (years)", 0, 10, 4)
+    burnin_years = st.slider("Burn-in period (years)", 0, 10, 4, help="No effect for Massey and Colley")
 
     # --- ELO SETTINGS ---
     if rating_system == "Elo":
@@ -1295,18 +1295,6 @@ st.markdown(
     f'<div class="main-subtitle">{start_date} → {end_date}'
     f' &nbsp;·&nbsp; {result["total_games"]:,} games'
     f' &nbsp;·&nbsp; {result["burnin_count"]:,} burn-in</div>',
-    unsafe_allow_html=True
-)
-
-mc1, mc2 = st.columns(2)
-mc1.markdown(
-    f'<div class="metric-box"><div class="metric-value">{burnin_years}yr</div>'
-    f'<div class="metric-label">Burn-in Period</div></div>',
-    unsafe_allow_html=True
-)
-mc2.markdown(
-    f'<div class="metric-box"><div class="metric-value">{result["burnin_count"]:,}</div>'
-    f'<div class="metric-label">Burn-in Games</div></div>',
     unsafe_allow_html=True
 )
 
