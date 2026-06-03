@@ -174,8 +174,8 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 .stButton > button p {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
-}  border: 1px solid #1e1e2e !important; border-radius: 6px !important;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -321,11 +321,10 @@ with st.sidebar:
         end_date = st.date_input("End", value=pd.to_datetime("2025-12-31"),
                                  min_value=pd.to_datetime("1990-01-01"))
 
-    burnin_years = st.slider("Burn-in period (years)", 0, 10, 4, help="No effect for Massey and Colley")
-
     # --- ELO SETTINGS ---
     if rating_system == "Elo":
-        st.markdown("### ⚙️ Elo Settings")
+        st.markdown("### Elo Settings")
+        burnin_years = st.slider("Burn-in period (years)", 0, 10, 4)
         home_adv   = st.slider("Home advantage",    0,    150, 70)
         decay_rate = st.slider("Time decay rate",   0.00, 0.20, 0.03, step=0.01)
         regression = st.slider("Regression factor", 0.0,  0.5,  0.1,  step=0.05)
@@ -353,9 +352,11 @@ with st.sidebar:
 
     elif rating_system == "Massey":
         st.markdown("### Massey Settings")
+        burnin_years = 0
 
         massey_weighting = st.selectbox("Age weighting", ["Uniform", "Linear", "Log"], key="m_weight")
-        massey_years_back = st.slider("Years back", 1, 10, 4, key="m_yback")
+        massey_years_back = st.slider("Years back", 1, 10, 4, key="m_yback",
+                                      help="Only affects Log age weighting")
 
         if massey_weighting == "Log":
             massey_years95 = st.slider("Years for 95% weight", 0.1, 3.0, 0.5, step=0.1, key="m_y95")
@@ -388,9 +389,11 @@ with st.sidebar:
     #Colley Settings
     elif rating_system == "Colley":
         st.markdown("### Colley Settings")
+        burnin_years = 0
 
         colley_weighting = st.selectbox("Age weighting", ["Uniform", "Linear", "Log"], key="c_weight")
-        colley_years_back = st.slider("Years back", 1, 10, 4, key="c_yback")
+        colley_years_back = st.slider("Years back", 1, 10, 4, key="c_yback",
+                                      help="Only affects Log age weighting")
 
         if colley_weighting == "Log":
             colley_years95 = st.slider("Years for 95% weight", 0.1, 3.0, 0.5, step=0.1, key="c_y95")
@@ -805,10 +808,6 @@ def run_massey(start_date, end_date, burnin_years,
 
     start_dt     = pd.to_datetime(start_date)
     end_dt       = pd.to_datetime(end_date)
-    burnin_start = start_dt - pd.DateOffset(years=burnin_years)
-
-    display_games = (all_games[(all_games["date"] >= burnin_start) & (all_games["date"] <= end_dt)]
-                     .sort_values("date").reset_index(drop=True))
     show_games    = (all_games[(all_games["date"] >= start_dt) & (all_games["date"] <= end_dt)]
                      .sort_values("date").reset_index(drop=True))
 
@@ -1025,10 +1024,6 @@ def run_colley(start_date, end_date, burnin_years,
 
     start_dt     = pd.to_datetime(start_date)
     end_dt       = pd.to_datetime(end_date)
-    burnin_start = start_dt - pd.DateOffset(years=burnin_years)
-
-    display_games = (all_games[(all_games["date"] >= burnin_start) & (all_games["date"] <= end_dt)]
-                     .sort_values("date").reset_index(drop=True))
     show_games    = (all_games[(all_games["date"] >= start_dt) & (all_games["date"] <= end_dt)]
                      .sort_values("date").reset_index(drop=True))
 
@@ -1237,7 +1232,7 @@ def run_colley(start_date, end_date, burnin_years,
                for team in all_teams}
 
     result = _build_bracket_result(ratings, all_teams, show_games)
-    result["burnin_count"] = len(display_games) - len(show_games)
+    result["burnin_count"] = 0
     return result
 
 # -------------------------------------------------
@@ -1294,9 +1289,22 @@ st.markdown('<div class="main-title">WORLD CUP MATCH-MATICS</div>', unsafe_allow
 st.markdown(
     f'<div class="main-subtitle">{start_date} → {end_date}'
     f' &nbsp;·&nbsp; {result["total_games"]:,} games'
-    f' &nbsp;·&nbsp; {result["burnin_count"]:,} burn-in</div>',
+    f'</div>',
     unsafe_allow_html=True
 )
+
+if rating_system == "Elo":
+    mc1, mc2 = st.columns(2)
+    mc1.markdown(
+        f'<div class="metric-box"><div class="metric-value">{burnin_years}yr</div>'
+        f'<div class="metric-label">Burn-in Period</div></div>',
+        unsafe_allow_html=True
+    )
+    mc2.markdown(
+        f'<div class="metric-box"><div class="metric-value">{result["burnin_count"]:,}</div>'
+        f'<div class="metric-label">Burn-in Games</div></div>',
+        unsafe_allow_html=True
+    )
 
 st.markdown(
     f'<div class="winner-banner">'
@@ -1595,38 +1603,1516 @@ with tab3:
     bracket_html = (
         '<div style="display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:12px 0;">'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">R32</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R32</div>'
         + left_r32 + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">R16</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R16</div>'
         + left_r16 + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">QF</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">QF</div>'
         + left_qf + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">SF</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">SF</div>'
         + left_sf + '</div>'
 
         + final_html +
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">SF</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">SF</div>'
         + right_sf + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">QF</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">QF</div>'
         + right_qf + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">R16</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R16</div>'
         + right_r16 + '</div>'
 
-        '<div style="display:flex;flex-direction:column;gap:0;">'
-        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">R32</div>'
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R32</div>'
+        + right_r32 + '</div>'
+
+        '</div>'
+    )
+
+    st.markdown(
+        '<div class="bracket-wrap">' + bracket_html + '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="footer"> <div style="text-align:center"> <small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
+
+with tab4:
+    st.markdown("""
+    <div style="max-width:860px;padding:8px 0;">
+
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.6rem;letter-spacing:0.1em;
+    color:#f0e040;border-bottom:1px solid #1e1e2e;padding-bottom:0.4rem;margin-bottom:1.2rem;">
+    HOW TO USE THIS APP</div>
+
+    <p style="color:#aaa;font-size:0.9rem;line-height:1.7;margin-bottom:1.4rem;">
+    Choose a rating system, configure the settings in the sidebar, and press
+    <strong style="color:#f0e040;">Run Simulation</strong> to generate rankings and a full
+    2026 World Cup bracket. Each rating system uses historical international match results
+    to estimate team strength. The three methods differ in how they do this — see below.
+    </p>
+
+    <!-- ══════════════ RATING SYSTEMS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">RATING SYSTEMS</div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Elo</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    An iterative system: ratings update after every game based on the result versus the
+    expected result. A team that beats a highly-rated opponent gains more points than one
+    that beats a weak opponent. Elo is path-dependent — the order of results matters, and
+    a team's current rating carries memory of everything that happened before the start date.
+    This is handled by the burn-in period (see below). Elo accounts for score margins via
+    a goal-difference multiplier, and older matches are down-weighted via time decay.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Massey</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    A linear algebra method that fits ratings to explain all observed score margins simultaneously.
+    Every game contributes one equation, and the system solves them all at once — so every result
+    directly influences every team's final rating through the web of shared opponents.
+    A 3–0 win counts more than a 1–0 win. Score margins are capped by the
+    <strong style="color:#e8e4dc;">Max Score Difference</strong> setting to prevent blowouts
+    from distorting ratings. Massey has no burn-in; it only uses games in the selected date window.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Colley</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    A linear algebra method similar to Massey, but score margins are completely ignored —
+    only wins, draws, and losses matter. Like Massey, it solves all results simultaneously
+    and accounts for strength of schedule. A win over Argentina is worth more than a win
+    over a weaker side. Colley also has no burn-in and only uses games in the selected date window.
+    </div></div>
+
+    <!-- ══════════════ DATE RANGE ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">DATE RANGE</div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Start / End Date</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    The window of matches used to build the ratings. Only games played between these two
+    dates are included. A wider window gives more data but may include results from squads
+    that no longer reflect the current team. A narrower window is more reactive to recent
+    form but may miss important results. Two to four years ending near the present is typical.
+    </div></div>
+
+    <!-- ══════════════ ELO SETTINGS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">ELO SETTINGS</div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Burn-in Period</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Every team starts at 1500 Elo before any games are processed. Without a warm-up period,
+    ratings at the start of your window are noisy — a weak team that happens to win its first
+    few games looks artificially strong. The burn-in silently processes <em>N</em> years of
+    matches before your start date so teams enter the display window with realistic ratings.
+    Four to six years is recommended. Only applies to Elo.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Home Advantage</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Adds this many Elo points to the home team's effective rating when calculating expected
+    win probability. Only applied to non-neutral venue games — World Cup matches and most
+    major tournaments are at neutral venues so this has no effect there. Typical range: 50–100.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Time Decay Rate</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Applies exponential decay to the K-factor of older matches so recent results have
+    more impact. A rate of 0.03 means a match from two years ago has roughly 94% of the
+    weight of one played today. Higher values make Elo more reactive to recent form.
+    Set to 0 to weight all matches equally regardless of age.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Regression Factor</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Once per calendar year, every team's rating is pulled partway toward their
+    confederation's average. A factor of 0.1 moves each team 10% of the way toward that
+    target. This prevents strong teams from inflating indefinitely, weak teams from
+    bottoming out, and corrects for confederation strength imbalances — teams that
+    accumulate Elo beating weak regional opponents get pulled back toward a realistic baseline.
+    Values between 0.05 and 0.2 are typical.
+    </div></div>
+
+    <!-- ══════════════ ELO K-FACTORS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">ELO K-FACTORS</div>
+
+    <p style="color:#aaa;font-size:0.82rem;line-height:1.7;margin-bottom:10px;">
+    The K-factor controls how many Elo points a result can move a team's rating. A higher K
+    means a single result has a larger impact. The actual rating change is also scaled by
+    goal difference and time decay, so results in big tournaments from recent months move
+    ratings the most.
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">FIFA World Cup <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 75</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">The highest-stakes tournament. Results here move ratings the most.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">UEFA Euro / Copa América <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 60</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Top continental tournaments. Slightly below the World Cup in weight.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">AFCON / Asian Cup / Gold Cup <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 30–35</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Continental tournaments outside UEFA/CONMEBOL. Lower weight reflects the weaker average competition level.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">World Cup Qualification <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 35</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">High-stakes competitive matches. Worth more than friendlies, less than the tournament itself.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Nations League / Euro Qual. <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 25</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Competitive but lower-stakes regional competition.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Friendly <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 10</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Low stakes. Teams often rotate squads — minimal impact on ratings.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Other <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 5</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Any competition not matched by the categories above. Keep low to avoid unrecognised tournaments distorting ratings.</div>
+    </div>
+    </div>
+
+    <!-- ══════════════ MASSEY & COLLEY SHARED SETTINGS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">MASSEY &amp; COLLEY SETTINGS</div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Penalty Shootout Weight</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Controls how much credit a team gets for winning a penalty shootout after a draw.
+    At <strong style="color:#e8e4dc;">0</strong>, a game that goes to penalties is treated
+    as a pure draw with no bonus for the winner. At <strong style="color:#e8e4dc;">0.5</strong>,
+    a penalty shootout win counts the same as a regular win. Values in between give
+    partial credit — the default of 0.33 treats a shootout win as roughly one third of a win.
+    The shootout result deflates the game's overall weight before being applied, so it doesn't
+    add on top of the draw result but replaces part of it.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Max Score Difference Cap <span style="color:#555;font-size:0.75rem;margin-left:6px;">Massey only</span></div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Caps the goal margin used in the Massey calculation. A 7–0 win with a cap of 5
+    is treated the same as a 5–0 win. This prevents blowout results against weak
+    opponents from inflating a team's rating disproportionately. Has no effect on Colley,
+    which ignores scores entirely.
+    </div></div>
+
+    <!-- ══════════════ AGE WEIGHTING ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">AGE WEIGHTING <span style="color:#555;font-size:0.7rem;letter-spacing:0.05em;font-family:DM Sans,sans-serif;font-weight:400;"> — Massey &amp; Colley</span></div>
+
+    <p style="color:#aaa;font-size:0.82rem;line-height:1.7;margin-bottom:10px;">
+    Controls how much weight older games receive relative to recent ones. Applied to both
+    Massey and Colley. The <strong style="color:#e8e4dc;">Years back</strong> slider only
+    affects Log weighting.
+    </p>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Uniform</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Every game is weighted equally regardless of when it was played. A match from four
+    years ago counts the same as one played last week.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Linear</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Game weight increases linearly from the start of the date window to the end.
+    You set the weight for the oldest game in the window and the weight for the most recent —
+    everything in between is interpolated along a straight line.
+    </div>
+    <div style="color:#555;font-size:0.78rem;margin-top:6px;line-height:1.5;">
+    Parameters: <span style="color:#888;">Weight of oldest game</span> — applied to games on the first day of the window.
+    <span style="color:#888;">Weight of newest game</span> — applied to games on the last day.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Log</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    Game weight follows a logistic (S-curve) decay. The most recent games are weighted
+    at nearly 100% and weight falls off smoothly into the past. You define the shape
+    of the curve by specifying two anchor points.
+    </div>
+    <div style="color:#555;font-size:0.78rem;margin-top:6px;line-height:1.5;">
+    Parameters: <span style="color:#888;">Years for 95% weight</span> — a game this far in the past retains 95% of its value.
+    <span style="color:#888;">Years for 50% weight</span> — a game this far in the past retains 50% of its value.
+    The curve is steeper when these two values are close together.
+    Must satisfy: Years back &gt; Years for 50% &gt; Years for 95%.
+    </div></div>
+
+    <!-- ══════════════ TOURNAMENT WEIGHTS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">TOURNAMENT WEIGHTS <span style="color:#555;font-size:0.7rem;letter-spacing:0.05em;font-family:DM Sans,sans-serif;font-weight:400;"> — Massey &amp; Colley</span></div>
+
+    <p style="color:#aaa;font-size:0.82rem;line-height:1.7;margin-bottom:10px;">
+    Each game's weight in the Massey/Colley matrix is multiplied by its tournament weight,
+    so results in more important competitions have a larger influence on the final ratings
+    than friendlies or regional qualifiers. These are separate from the Elo K-factors.
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">World Cup <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 4.0</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">The pinnacle of international football. Highest weight.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Continental Final <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 3.0</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Euro, Copa América, AFCON, Asian Cup, Gold Cup, Nations League, etc.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Confed. Cup <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 3.0</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">FIFA Confederations Cup and intercontinental tournaments.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">World Cup Qual. <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 2.5</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">High-stakes qualifying — direct path to the World Cup.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Continental Qual. <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 2.5</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Regional qualification for continental championships.</div>
+    </div>
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:12px 14px;">
+    <div style="color:#e8e4dc;font-size:0.83rem;font-weight:500;margin-bottom:3px;">Friendly <span style="color:#f0e040;font-size:0.75rem;margin-left:4px;">default 1.0</span></div>
+    <div style="color:#888;font-size:0.78rem;line-height:1.5;">Lowest weight. No qualification stakes; squads often rotated.</div>
+    </div>
+    </div>
+
+    <!-- ══════════════ READING THE RESULTS ══════════════ -->
+    <div style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;letter-spacing:0.1em;
+    color:#f0e040;margin:1.4rem 0 0.6rem;">READING THE RESULTS</div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Rankings tab</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    All teams sorted by rating. Teams in the 2026 World Cup are highlighted in
+    <span style="color:#4caf50;">green</span>. The top 10 have a gold left border.
+    Use the confederation filter in the sidebar to narrow the list to a specific region.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Groups tab</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    All 12 groups ranked by rating. <span style="color:#f0e040;">Q</span> marks the top 2
+    teams who advance automatically. <span style="color:#4caf50;">3rd</span> marks a
+    third-place team that qualifies as one of the best 8 third-place finishers across all groups.
+    </div></div>
+
+    <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Bracket tab</div>
+    <div style="color:#888;font-size:0.82rem;line-height:1.6;">
+    The full knockout bracket from Round of 32 to the Final. In every match the higher-rated
+    team wins — there is no randomness or probability involved. The predicted champion appears
+    at the centre of the bracket and at the top of the page.
+    </div></div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="footer"> <div style="text-align:center"> <small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
+    st.stop()
+
+# -------------------------------------------------
+# CACHED SIMULATION FUNCTION
+# -------------------------------------------------
+@st.cache_data(show_spinner=False)
+def run_simulation(start_date, end_date, burnin_years, home_adv, decay_rate, regression,
+                   k_wc, k_euro, k_copa, k_afcon, k_gold, k_asian,
+                   k_wcq, k_nl, k_euroq, k_afconq, k_asianq, k_friendly, k_other):
+
+    try:
+        all_games = pd.read_csv("all_international_soccer_results.csv", parse_dates=["date"])
+    except FileNotFoundError:
+        return None
+
+    all_games["home_team"]  = all_games["home_team"].astype(str).str.strip()
+    all_games["away_team"]  = all_games["away_team"].astype(str).str.strip()
+    all_games["tournament"] = all_games["tournament"].astype(str).str.lower().str.strip()
+    all_games["neutral"]    = all_games["neutral"].astype(str).str.lower().isin(["true", "1"])
+    all_games["home_score"] = pd.to_numeric(all_games["home_score"], errors="coerce")
+    all_games["away_score"] = pd.to_numeric(all_games["away_score"], errors="coerce")
+    all_games = all_games.dropna(subset=["home_score", "away_score", "date"])
+
+    start_dt     = pd.to_datetime(start_date)
+    end_dt       = pd.to_datetime(end_date)
+    burnin_start = start_dt - pd.DateOffset(years=burnin_years)
+
+    burnin_games  = (all_games[(all_games["date"] >= burnin_start) & (all_games["date"] < start_dt)]
+                     .sort_values("date").reset_index(drop=True))
+    display_games = (all_games[(all_games["date"] >= start_dt) & (all_games["date"] <= end_dt)]
+                     .sort_values("date").reset_index(drop=True))
+
+    if display_games.empty:
+        return None
+
+    combined    = pd.concat([burnin_games, display_games])
+    all_teams   = list(pd.concat([combined["home_team"], combined["away_team"]]).unique())
+    team_to_idx = {team: i for i, team in enumerate(all_teams)}
+    elo         = np.full(len(all_teams), 1500.0)
+
+    def get_conf_mean(team):
+        conf = CONFEDERATION_MAP.get(team)
+        return CONFEDERATION_MEAN.get(conf, float(np.mean(elo))) if conf else float(np.mean(elo))
+
+    def exp_score(r1, r2, ha):
+        return 1.0 / (10 ** (-((r1 + ha) - r2) / 400) + 1)
+
+    def get_k(t):
+        if "friendly" in t:                                              return k_friendly
+        if "fifa world cup" in t and "qualification" not in t:           return k_wc
+        if "copa america" in t:                                          return k_copa
+        if "uefa euro" in t and "qualification" not in t:                return k_euro
+        if "african cup of nations" in t and "qualification" not in t:   return k_afcon
+        if "gold cup" in t:                                              return k_gold
+        if "asian cup" in t and "qualification" not in t:                return k_asian
+        if "world cup qualification" in t:                               return k_wcq
+        if "nations league" in t:                                        return k_nl
+        if "uefa euro qualification" in t:                               return k_euroq
+        if "african cup of nations qualification" in t:                  return k_afconq
+        if "asian cup qualification" in t:                               return k_asianq
+        return k_other
+
+    def gdm(diff):
+        if diff <= 1: return 1.0
+        if diff == 2: return 1.3
+        if diff == 3: return 1.5
+        return 1.5 + (diff - 3) / 12.0
+
+    def tdecay(match_date, current_date):
+        return math.exp(-decay_rate * (current_date - match_date).days / 365.25)
+
+    team_history = defaultdict(list)
+
+    def run_loop(games_df, track):
+        correct, brier, last_yr = 0, 0.0, None
+        cur = games_df["date"].max()
+        for row in games_df.itertuples():
+            yr = row.date.year
+            if last_yr is not None and yr != last_yr:
+                for team, idx in team_to_idx.items():
+                    elo[idx] += regression * (get_conf_mean(team) - elo[idx])
+            last_yr = yr
+            t1 = team_to_idx[row.home_team]
+            t2 = team_to_idx[row.away_team]
+            r1, r2 = elo[t1], elo[t2]
+            s1, s2 = int(row.home_score), int(row.away_score)
+            ha = 0 if row.neutral else home_adv
+            We = exp_score(r1, r2, ha)
+            W  = 1.0 if s1 > s2 else (0.0 if s1 < s2 else 0.5)
+            if track:
+                if (We > 0.5 and s1 > s2) or (We < 0.5 and s2 > s1):
+                    correct += 1
+                brier += (We - W) ** 2
+            K  = get_k(row.tournament) * tdecay(row.date, cur) * gdm(abs(s1 - s2))
+            ch = K * (W - We)
+            elo[t1] += ch
+            elo[t2] -= ch
+            # Penalty shootout: apply a reduced extra delta for the winner
+            pso_key = (row.date.date(), row.home_team, row.away_team)
+            if pso_key in SHOOTOUT_SET and s1 == s2:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                pso_K = K * 0.3  # 30% of the normal K — tune this
+                if pso_winner == row.home_team:
+                    elo[t1] += pso_K * (1 - We)
+                    elo[t2] -= pso_K * (1 - We)
+                elif pso_winner == row.away_team:
+                    elo[t1] -= pso_K * We
+                    elo[t2] += pso_K * We
+            if track:
+                date_str = str(row.date)[:10]
+                res_h = "W" if s1 > s2 else ("D" if s1 == s2 else "L")
+                res_a = "W" if s2 > s1 else ("D" if s1 == s2 else "L")
+                team_history[row.home_team].append((date_str, row.away_team, s1, s2, res_h, ch))
+                team_history[row.away_team].append((date_str, row.home_team, s2, s1, res_a, -ch))
+        return correct, len(games_df), brier
+
+    run_loop(burnin_games, False)
+    team_history = defaultdict(list)
+    for row in display_games.sort_values("date").itertuples():
+        t1_name = row.home_team
+        t2_name = row.away_team
+        s1, s2 = int(row.home_score), int(row.away_score)
+        result_h = "W" if s1 > s2 else ("D" if s1 == s2 else "L")
+        result_a = "W" if s2 > s1 else ("D" if s1 == s2 else "L")
+        date_str = str(row.date)[:10]
+        team_history[t1_name].append((date_str, t2_name, s1, s2, result_h, 0.0))
+        team_history[t2_name].append((date_str, t1_name, s2, s1, result_a, 0.0))
+    
+    correct_preds, total_games, brier_total = run_loop(display_games, True)
+
+    ratings = {team: float(elo[team_to_idx[team]]) for team in all_teams}
+
+    # Group stage
+    group_results    = {}
+    third_place_list = []
+    for group_name, team_list in GROUPS.items():
+        letter = group_name.split()[-1]
+        ranked = sorted([(t, ratings.get(t, 1500.0)) for t in team_list], key=lambda x: -x[1])
+        group_results[letter] = ranked
+        third_place_list.append((letter, ranked[2][0], ranked[2][1]))
+
+    third_place_list.sort(key=lambda x: -x[2])
+    best_third   = third_place_list[:8]
+    third_lookup = {grp: team for grp, team, _ in best_third}
+
+    try:
+        df = pd.read_csv("third_place_combinations.csv", header=None)
+        df = df.drop(index=[0, 1]).reset_index(drop=True)
+        scm = {"1A": 12, "1B": 13, "1D": 14, "1E": 15, "1G": 16, "1I": 17, "1K": 18, "1L": 19}
+        ftable = {}
+        for _, row in df.iterrows():
+            key = frozenset(str(row[i]).strip() for i in range(12)
+                            if pd.notna(row[i]) and str(row[i]).strip() not in ("", "nan"))
+            if len(key) == 8:
+                ftable[key] = {s: str(row[c]).strip() for s, c in scm.items()}
+        bkg = frozenset(g for g, _, _ in best_third)
+        if bkg in ftable:
+            tpm = ftable[bkg]
+    except Exception:
+        pass
+
+    def resolve(label):
+        if label.startswith("1"): return group_results[label[1]][0][0]
+        if label.startswith("2"): return group_results[label[1]][1][0]
+        return third_lookup.get(label[1], "TBD")
+
+    def sim(t1, t2):
+        return t1 if ratings.get(t1, 1500) >= ratings.get(t2, 1500) else t2
+
+    r32s = [
+        (73,"2A","2B"),(74,"1E",tpm.get("1E","3D")),(75,"1F","2C"),(76,"1C","2F"),
+        (77,"1I",tpm.get("1I","3F")),(78,"2E","2I"),(79,"1A",tpm.get("1A","3E")),
+        (80,"1L",tpm.get("1L","3K")),(81,"1D",tpm.get("1D","3I")),(82,"1G",tpm.get("1G","3J")),
+        (83,"2K","2L"),(84,"1H","2J"),(85,"1B",tpm.get("1B","3G")),
+        (86,"1J","2H"),(87,"1K",tpm.get("1K","3L")),(88,"2D","2G"),
+    ]
+    r32_w = {}
+    r32_matches = []
+    for mn, l1, l2 in r32s:
+        t1, t2 = resolve(l1), resolve(l2)
+        w = sim(t1, t2)
+        r32_w[mn] = w
+        r32_matches.append((mn, t1, t2, w))
+
+    r16s = [(89,74,77),(90,73,75),(91,76,78),(92,79,80),(93,83,84),(94,81,82),(95,86,88),(96,85,87)]
+    r16_w = {}
+    r16_matches = []
+    for mn, m1, m2 in r16s:
+        t1, t2 = r32_w[m1], r32_w[m2]
+        w = sim(t1, t2)
+        r16_w[mn] = w
+        r16_matches.append((mn, t1, t2, w))
+
+    qfs = [(97,89,90),(98,93,94),(99,91,92),(100,95,96)]
+    qf_w = {}
+    qf_matches = []
+    for mn, m1, m2 in qfs:
+        t1, t2 = r16_w[m1], r16_w[m2]
+        w = sim(t1, t2)
+        qf_w[mn] = w
+        qf_matches.append((mn, t1, t2, w))
+
+    sfs = [(101,97,98),(102,99,100)]
+    sf_w, sf_l = {}, {}
+    sf_matches = []
+    for mn, m1, m2 in sfs:
+        t1, t2 = qf_w[m1], qf_w[m2]
+        w = sim(t1, t2)
+        sf_w[mn] = w
+        sf_l[mn] = t2 if w == t1 else t1
+        sf_matches.append((mn, t1, t2, w))
+
+    b1, b2   = sf_l[101], sf_l[102]
+    f1, f2   = sf_w[101], sf_w[102]
+    bronze_w = sim(b1, b2)
+    final_w  = sim(f1, f2)
+
+    return {
+        "ratings":       ratings,
+        "all_teams":     all_teams,
+        "group_results": group_results,
+        "best_third":    best_third,
+        "r32_matches":   r32_matches,
+        "r16_matches":   r16_matches,
+        "qf_matches":    qf_matches,
+        "sf_matches":    sf_matches,
+        "bronze":        (b1, b2, bronze_w),
+        "final":         (f1, f2, final_w),
+        "total_games":   total_games,
+        "burnin_count":  len(burnin_games),
+    }
+
+def _build_bracket_result(ratings, all_teams, display_games):
+    """Shared bracket builder used by Massey and Colley."""
+    group_results    = {}
+    third_place_list = []
+    for group_name, team_list in GROUPS.items():
+        letter = group_name.split()[-1]
+        ranked = sorted([(t, ratings.get(t, 1500.0)) for t in team_list], key=lambda x: -x[1])
+        group_results[letter] = ranked
+        third_place_list.append((letter, ranked[2][0], ranked[2][1]))
+
+    third_place_list.sort(key=lambda x: -x[2])
+    best_third   = third_place_list[:8]
+    third_lookup = {grp: team for grp, team, _ in best_third}
+
+    tpm = {"1A": "3E", "1B": "3G", "1D": "3I", "1E": "3D",
+           "1G": "3J", "1I": "3F", "1K": "3L", "1L": "3K"}
+    try:
+        df = pd.read_csv("third_place_combinations.csv", header=None)
+        df = df.drop(index=[0, 1]).reset_index(drop=True)
+        scm = {"1A": 12, "1B": 13, "1D": 14, "1E": 15,
+               "1G": 16, "1I": 17, "1K": 18, "1L": 19}
+        ftable = {}
+        for _, row in df.iterrows():
+            key = frozenset(str(row[i]).strip() for i in range(12)
+                            if pd.notna(row[i]) and str(row[i]).strip() not in ("", "nan"))
+            if len(key) == 8:
+                ftable[key] = {s: str(row[c]).strip() for s, c in scm.items()}
+        bkg = frozenset(g for g, _, _ in best_third)
+        if bkg in ftable:
+            tpm = ftable[bkg]
+    except Exception:
+        pass
+
+    def resolve(label):
+        if label.startswith("1"): return group_results[label[1]][0][0]
+        if label.startswith("2"): return group_results[label[1]][1][0]
+        return third_lookup.get(label[1], "TBD")
+
+    def sim(t1, t2):
+        return t1 if ratings.get(t1, 1500) >= ratings.get(t2, 1500) else t2
+
+    r32s = [
+        (73,"2A","2B"),(74,"1E",tpm.get("1E","3D")),(75,"1F","2C"),(76,"1C","2F"),
+        (77,"1I",tpm.get("1I","3F")),(78,"2E","2I"),(79,"1A",tpm.get("1A","3E")),
+        (80,"1L",tpm.get("1L","3K")),(81,"1D",tpm.get("1D","3I")),(82,"1G",tpm.get("1G","3J")),
+        (83,"2K","2L"),(84,"1H","2J"),(85,"1B",tpm.get("1B","3G")),
+        (86,"1J","2H"),(87,"1K",tpm.get("1K","3L")),(88,"2D","2G"),
+    ]
+    r32_w, r32_matches = {}, []
+    for mn, l1, l2 in r32s:
+        t1, t2 = resolve(l1), resolve(l2)
+        w = sim(t1, t2)
+        r32_w[mn] = w
+        r32_matches.append((mn, t1, t2, w))
+
+    r16s = [(89,74,77),(90,73,75),(91,76,78),(92,79,80),(93,83,84),(94,81,82),(95,86,88),(96,85,87)]
+    r16_w, r16_matches = {}, []
+    for mn, m1, m2 in r16s:
+        t1, t2 = r32_w[m1], r32_w[m2]
+        w = sim(t1, t2)
+        r16_w[mn] = w
+        r16_matches.append((mn, t1, t2, w))
+
+    qfs = [(97,89,90),(98,93,94),(99,91,92),(100,95,96)]
+    qf_w, qf_matches = {}, []
+    for mn, m1, m2 in qfs:
+        t1, t2 = r16_w[m1], r16_w[m2]
+        w = sim(t1, t2)
+        qf_w[mn] = w
+        qf_matches.append((mn, t1, t2, w))
+
+    sfs = [(101,97,98),(102,99,100)]
+    sf_w, sf_l, sf_matches = {}, {}, []
+    for mn, m1, m2 in sfs:
+        t1, t2 = qf_w[m1], qf_w[m2]
+        w = sim(t1, t2)
+        sf_w[mn] = w
+        sf_l[mn] = t2 if w == t1 else t1
+        sf_matches.append((mn, t1, t2, w))
+
+    b1, b2   = sf_l[101], sf_l[102]
+    f1, f2   = sf_w[101], sf_w[102]
+    bronze_w = sim(b1, b2)
+    final_w  = sim(f1, f2)
+
+    return {
+        "ratings":       ratings,
+        "all_teams":     all_teams,
+        "group_results": group_results,
+        "best_third":    best_third,
+        "r32_matches":   r32_matches,
+        "r16_matches":   r16_matches,
+        "qf_matches":    qf_matches,
+        "sf_matches":    sf_matches,
+        "bronze":        (b1, b2, bronze_w),
+        "final":         (f1, f2, final_w),
+        "total_games":   len(display_games),
+        "burnin_count":  0,
+    }
+
+@st.cache_data(show_spinner=False)
+def run_massey(start_date, end_date, burnin_years,
+               weighting, years_back, years95, years50,
+               wt_friendly, wt_cont_qual, wt_wcq, wt_conf_cup,
+               wt_cont_final, wt_wc_final,
+               max_score_diff, pso_val,
+               linear_first, linear_last):
+
+    try:
+        all_games = pd.read_csv("all_international_soccer_results.csv", parse_dates=["date"])
+    except FileNotFoundError:
+        return None
+
+    all_games["home_team"]  = all_games["home_team"].astype(str).str.strip()
+    all_games["away_team"]  = all_games["away_team"].astype(str).str.strip()
+    all_games["tournament"] = all_games["tournament"].astype(str).str.strip()
+    all_games["neutral"]    = all_games["neutral"].astype(str).str.lower().isin(["true", "1"])
+    all_games["home_score"] = pd.to_numeric(all_games["home_score"], errors="coerce")
+    all_games["away_score"] = pd.to_numeric(all_games["away_score"], errors="coerce")
+    all_games = all_games.dropna(subset=["home_score", "away_score", "date"])
+
+    start_dt     = pd.to_datetime(start_date)
+    end_dt       = pd.to_datetime(end_date)
+    show_games    = (all_games[(all_games["date"] >= start_dt) & (all_games["date"] <= end_dt)]
+                     .sort_values("date").reset_index(drop=True))
+
+    if show_games.empty:
+        return None
+
+    all_teams   = sorted(set(show_games["home_team"]) | set(show_games["away_team"]))
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
+
+    last_date     = show_games["date"].max()
+    start_date_dt = show_games["date"].min()
+    date_gap      = max((last_date - start_date_dt).days, 1)
+
+    # --- Age weighting function ---
+    if weighting == "Log":
+        A_log = (-years_back) / (years50 - years95) * math.log(0.95 / 0.05)
+        B_log = (years_back - years50) / (years50 - years95) * math.log(0.95 / 0.05)
+        def age_weight(x):
+            return 1.0 / (1.0 + math.exp(A_log * x + B_log))
+    elif weighting == "Linear":
+        def age_weight(x):
+            return linear_first + x * (linear_last - linear_first)
+    else:
+        def age_weight(x):
+            return 1.0
+
+    # --- Tournament classification map (matches fifaMassey notebook) ---
+    _TOURNAMENT_TYPE_MAP = {
+        "FIFA World Cup":                          "wc_final",
+        "FIFA World Cup qualification":            "wcq",
+        "Friendly":                                "friendly",
+        "FIFA Series":                             "friendly",
+        "Canadian Shield":                         "friendly",
+        "CONCACAF Series":                         "friendly",
+        "Kirin Challenge Cup":                     "friendly",
+        "Kirin Cup":                               "friendly",
+        "Al Ain International Cup":                "friendly",
+        "Jordan International Tournament":         "friendly",
+        "King's Cup":                              "friendly",
+        "MSG Prime Minister's Cup":                "friendly",
+        "Mauritius Four Nations Cup":              "friendly",
+        "Mukuru 4 Nations":                        "friendly",
+        "Morocco, Capital of African Football":    "friendly",
+        "Tri Nation Tournament":                   "friendly",
+        "Tri-Nations Series":                      "friendly",
+        "Unity Cup":                               "friendly",
+        "Indian Ocean Island Games":               "friendly",
+        "Island Games":                            "friendly",
+        "Pacific Games":                           "friendly",
+        "Mapinduzi Cup":                           "friendly",
+        "Marianas Cup":                            "friendly",
+        "Muratti Vase":                            "friendly",
+        "Navruz Cup":                              "friendly",
+        "Outrigger Challenge Cup":                 "friendly",
+        "Soccer Ashes":                            "friendly",
+        "South Asian Super Cup":                   "friendly",
+        "CONIFA Africa Football Cup":              "friendly",
+        "CONIFA Asia Cup":                         "friendly",
+        "CONIFA South America Football Cup":       "friendly",
+        "CONIFA World Football Cup qualification": "friendly",
+        "Merdeka Tournament":                      "friendly",
+        "UEFA Euro":                               "cont_final",
+        "Copa América":                            "cont_final",
+        "African Cup of Nations":                  "cont_final",
+        "AFC Asian Cup":                           "cont_final",
+        "Gold Cup":                                "cont_final",
+        "Oceania Nations Cup":                     "cont_final",
+        "AFF Championship":                        "cont_final",
+        "ASEAN Championship":                      "cont_final",
+        "EAFF Championship":                       "cont_final",
+        "SAFF Cup":                                "cont_final",
+        "Gulf Cup":                                "cont_final",
+        "COSAFA Cup":                              "cont_final",
+        "CAFA Nations Cup":                        "cont_final",
+        "Baltic Cup":                              "cont_final",
+        "Arab Cup":                                "cont_final",
+        "UEFA Nations League":                     "cont_final",
+        "CONCACAF Nations League":                 "cont_final",
+        "UEFA Euro qualification":                 "cont_qual",
+        "AFC Asian Cup qualification":             "cont_qual",
+        "African Cup of Nations qualification":    "cont_qual",
+        "Gold Cup qualification":                  "cont_qual",
+        "Oceania Nations Cup qualification":       "cont_qual",
+        "AFF Championship qualification":          "cont_qual",
+        "ASEAN Championship qualification":        "cont_qual",
+        "EAFF Championship qualification":         "cont_qual",
+        "Arab Cup qualification":                  "cont_qual",
+        "Copa América qualification":              "cont_qual",
+        "FIFA Confederations Cup":                 "cont_final",
+        "CONMEBOL–UEFA Cup of Champions":          "cont_final",
+        "Intercontinental Cup":                    "cont_final",
+    }
+
+    def get_tournament_weight(tournament):
+        # Notebook uses original-case exact match; tournament names are NOT
+        # lowercased in run_massey so this works directly.
+        typ = _TOURNAMENT_TYPE_MAP.get(tournament)
+        if typ == "wc_final":    return wt_wc_final
+        if typ == "wcq":         return wt_wcq
+        if typ == "cont_final":  return wt_cont_final
+        if typ == "cont_qual":   return wt_cont_qual
+        if typ == "conf_cup":    return wt_conf_cup
+        if typ == "friendly":    return wt_friendly
+        # Unclassified → same as Friendly (matches notebook's Unclassified = 1)
+        return wt_friendly
+
+    # --- Filter to main connected component (matches notebook) ---
+    import networkx as nx
+    G = nx.Graph()
+    G.add_nodes_from(all_teams)
+    for row in show_games.itertuples():
+        if row.home_team in team_to_idx and row.away_team in team_to_idx:
+            G.add_edge(row.home_team, row.away_team)
+    components = list(nx.connected_components(G))
+    main_component = max(components, key=len)
+    show_games = show_games[
+        show_games["home_team"].isin(main_component) &
+        show_games["away_team"].isin(main_component)
+    ].copy()
+    all_teams   = sorted(main_component)
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
+
+    # --- PSO deflation factor (matches notebook) ---
+    pso_deflate = 1.0 - 2.0 * pso_val
+
+    # --- Build Massey matrix ---
+    M = np.zeros((n, n))
+    b = np.zeros(n)
+
+    for row in show_games.itertuples():
+        t1 = team_to_idx.get(row.home_team, -1)
+        t2 = team_to_idx.get(row.away_team, -1)
+        if t1 < 0 or t2 < 0:
+            continue
+
+        days_from_start = max((row.date - start_date_dt).days, 0)
+        x  = days_from_start / date_gap
+        wm = age_weight(x)
+        tw = get_tournament_weight(row.tournament)
+        w  = wm * tw
+
+        s1 = int(row.home_score)
+        s2 = int(row.away_score)
+
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
+
+        # Deflate weight for PSO games before updating matrix and b vector
+        if is_pso:
+            w *= pso_deflate
+
+        M[t1][t2] -= w
+        M[t2][t1] -= w
+        M[t1][t1] += w
+        M[t2][t2] += w
+
+        point_diff = min(abs(s1 - s2), max_score_diff)
+
+        if s1 > s2:
+            b[t1] += w * point_diff
+            b[t2] -= w * point_diff
+        elif s1 < s2:
+            b[t2] += w * point_diff
+            b[t1] -= w * point_diff
+        else:
+            if is_pso:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                if pso_winner == row.home_team:
+                    b[t1] += w
+                    b[t2] -= w
+                elif pso_winner == row.away_team:
+                    b[t2] += w
+                    b[t1] -= w
+
+    # Replace last row with sum = 0 constraint
+    M[-1] = np.ones(n)
+    b[-1] = 0.0
+
+    try:
+        r = np.linalg.solve(M, b)
+    except np.linalg.LinAlgError:
+        r = np.zeros(n)
+
+    ratings = {team: float(r[team_to_idx[team]])
+               for team in all_teams}
+
+    result = _build_bracket_result(ratings, all_teams, show_games)
+    result["burnin_count"] = 0
+    return result
+
+
+@st.cache_data(show_spinner=False)
+def run_colley(start_date, end_date, burnin_years,
+               weighting, years_back, years95, years50,
+               wt_friendly, wt_cont_qual, wt_wcq, wt_conf_cup,
+               wt_cont_final, wt_wc_final,
+               pso_weight,
+               linear_first, linear_last):
+
+    try:
+        all_games = pd.read_csv("all_international_soccer_results.csv", parse_dates=["date"])
+    except FileNotFoundError:
+        return None
+
+    all_games["home_team"]  = all_games["home_team"].astype(str).str.strip()
+    all_games["away_team"]  = all_games["away_team"].astype(str).str.strip()
+    all_games["tournament"] = all_games["tournament"].astype(str).str.lower().str.strip()
+    all_games["neutral"]    = all_games["neutral"].astype(str).str.lower().isin(["true", "1"])
+    all_games["home_score"] = pd.to_numeric(all_games["home_score"], errors="coerce")
+    all_games["away_score"] = pd.to_numeric(all_games["away_score"], errors="coerce")
+    all_games = all_games.dropna(subset=["home_score", "away_score", "date"])
+
+    start_dt     = pd.to_datetime(start_date)
+    end_dt       = pd.to_datetime(end_date)
+    show_games    = (all_games[(all_games["date"] >= start_dt) & (all_games["date"] <= end_dt)]
+                     .sort_values("date").reset_index(drop=True))
+
+    if show_games.empty:
+        return None
+
+    all_teams   = sorted(set(show_games["home_team"]) | set(show_games["away_team"]))
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
+
+    last_date     = show_games["date"].max()
+    start_date_dt = show_games["date"].min()
+    date_gap      = max((last_date - start_date_dt).days, 1)
+
+    if weighting == "Log":
+        A_log = (-years_back) / (years50 - years95) * math.log(0.95 / 0.05)
+        B_log = (years_back - years50) / (years50 - years95) * math.log(0.95 / 0.05)
+        def age_weight(x):
+            return 1.0 / (1.0 + math.exp(A_log * x + B_log))
+    elif weighting == "Linear":
+        def age_weight(x):
+            return linear_first + x * (linear_last - linear_first)
+    else:
+        def age_weight(x):
+            return 1.0
+
+    # Detailed tournament classification map (from fifaColley notebook).
+    # Keys are lowercased to match how the streamlit normalises tournament names.
+    _TOURNAMENT_TYPE_MAP = {
+        # World Cup
+        "fifa world cup":                         "wc_final",
+        "fifa world cup qualification":           "wcq",
+        # Friendlies
+        "friendly":                               "friendly",
+        "fifa series":                            "friendly",
+        "canadian shield":                        "friendly",
+        "concacaf series":                        "friendly",
+        "kirin challenge cup":                    "friendly",
+        "kirin cup":                              "friendly",
+        "al ain international cup":               "friendly",
+        "jordan international tournament":        "friendly",
+        "king's cup":                             "friendly",
+        "msg prime minister's cup":               "friendly",
+        "mauritius four nations cup":             "friendly",
+        "mukuru 4 nations":                       "friendly",
+        "morocco, capital of african football":   "friendly",
+        "tri nation tournament":                  "friendly",
+        "tri-nations series":                     "friendly",
+        "unity cup":                              "friendly",
+        "indian ocean island games":              "friendly",
+        "island games":                           "friendly",
+        "pacific games":                          "friendly",
+        "mapinduzi cup":                          "friendly",
+        "marianas cup":                           "friendly",
+        "muratti vase":                           "friendly",
+        "navruz cup":                             "friendly",
+        "outrigger challenge cup":                "friendly",
+        "soccer ashes":                           "friendly",
+        "south asian super cup":                  "friendly",
+        "conifa africa football cup":             "friendly",
+        "conifa asia cup":                        "friendly",
+        "conifa south america football cup":      "friendly",
+        "conifa world football cup qualification":"friendly",
+        "merdeka tournament":                     "friendly",
+        # Continental championships
+        "uefa euro":                              "cont_final",
+        "copa américa":                           "cont_final",
+        "african cup of nations":                 "cont_final",
+        "afc asian cup":                          "cont_final",
+        "gold cup":                               "cont_final",
+        "oceania nations cup":                    "cont_final",
+        "aff championship":                       "cont_final",
+        "asean championship":                     "cont_final",
+        "eaff championship":                      "cont_final",
+        "saff cup":                               "cont_final",
+        "gulf cup":                               "cont_final",
+        "cosafa cup":                             "cont_final",
+        "cafa nations cup":                       "cont_final",
+        "baltic cup":                             "cont_final",
+        "arab cup":                               "cont_final",
+        "uefa nations league":                    "cont_final",
+        "concacaf nations league":                "cont_final",
+        # Qualifiers
+        "uefa euro qualification":                "cont_qual",
+        "afc asian cup qualification":            "cont_qual",
+        "african cup of nations qualification":   "cont_qual",
+        "gold cup qualification":                 "cont_qual",
+        "oceania nations cup qualification":      "cont_qual",
+        "aff championship qualification":         "cont_qual",
+        "asean championship qualification":       "cont_qual",
+        "eaff championship qualification":        "cont_qual",
+        "arab cup qualification":                 "cont_qual",
+        "copa america qualification":             "cont_qual",
+        # Historical FIFA / Intercontinental
+        "fifa confederations cup":                "cont_final",
+        "conmebol–uefa cup of champions":         "cont_final",
+        "intercontinental cup":                   "cont_final",
+    }
+
+    def get_tournament_weight(tournament):
+        """Map a (lowercased) tournament name to a weight.
+
+        Uses the notebook's explicit map first (exact match on the normalised
+        name), then falls back to the existing substring heuristics so that
+        any tournament not listed above still gets a reasonable weight.
+        """
+        t = tournament  # already lowercased by the data-prep step above
+
+        # 1. Exact-match lookup from the notebook's detailed map
+        typ = _TOURNAMENT_TYPE_MAP.get(t)
+        if typ == "wc_final":    return wt_wc_final
+        if typ == "wcq":         return wt_wcq
+        if typ == "cont_final":  return wt_cont_final
+        if typ == "cont_qual":   return wt_cont_qual
+        if typ == "conf_cup":    return wt_conf_cup
+        if typ == "friendly":    return wt_friendly
+
+        # 2. Substring fallback (handles variants / new tournaments not in map)
+        if "friendly" in t:                                              return wt_friendly
+        if "fifa world cup" in t and "qualification" not in t:           return wt_wc_final
+        if "copa america" in t or "uefa euro" in t or "african cup" in t \
+           or "gold cup" in t or "asian cup" in t:
+            if "qualification" not in t:                                 return wt_cont_final
+        if "world cup qualification" in t:                               return wt_wcq
+        if "qualification" in t:                                         return wt_cont_qual
+        if "confederations cup" in t or "nations league" in t:           return wt_conf_cup
+        return wt_friendly  # unknown tournaments treated as friendlies
+    
+    # --- Filter to main connected component (matches notebook) ---
+    import networkx as nx
+    G = nx.Graph()
+    G.add_nodes_from(all_teams)
+    for row in show_games.itertuples():
+        if row.home_team in team_to_idx and row.away_team in team_to_idx:
+            G.add_edge(row.home_team, row.away_team)
+    components = list(nx.connected_components(G))
+    main_component = max(components, key=len)
+    show_games = show_games[
+        show_games["home_team"].isin(main_component) &
+        show_games["away_team"].isin(main_component)
+    ].copy()
+    all_teams   = sorted(main_component)
+    team_to_idx = {t: i for i, t in enumerate(all_teams)}
+    n           = len(all_teams)
+
+    # --- Build Colley matrix ---
+    # PSOdeflate mirrors the notebook: a PSO game's weight is scaled down
+    # to reflect reduced certainty, then win/loss credit applied normally.
+    pso_deflate = 1.0 - 2.0 * pso_weight
+
+    C = np.zeros((n, n))
+    for i in range(n):
+        C[i][i] = 2.0
+    b = np.ones(n)
+
+    for row in show_games.itertuples():
+        t1 = team_to_idx.get(row.home_team, -1)
+        t2 = team_to_idx.get(row.away_team, -1)
+        if t1 < 0 or t2 < 0:
+            continue
+
+        days_from_start = max((row.date - start_date_dt).days, 0)
+        x  = days_from_start / date_gap
+        wm = age_weight(x)
+        tw = get_tournament_weight(row.tournament)
+        w  = wm * tw
+
+        s1 = int(row.home_score)
+        s2 = int(row.away_score)
+
+        pso_key = (row.date.date(), row.home_team, row.away_team)
+        is_pso  = pso_key in SHOOTOUT_SET and s1 == s2
+
+        # Deflate weight for PSO games before updating matrix and b vector
+        if is_pso:
+            w *= pso_deflate
+
+        C[t1][t2] -= w
+        C[t2][t1] -= w
+        C[t1][t1] += w
+        C[t2][t2] += w
+
+        if s1 > s2:
+            b[t1] += w / 2.0
+            b[t2] -= w / 2.0
+        elif s1 < s2:
+            b[t2] += w / 2.0
+            b[t1] -= w / 2.0
+        else:
+            if is_pso:
+                pso_winner = SHOOTOUT_WINNER.get(pso_key)
+                if pso_winner == row.home_team:
+                    b[t1] += w / 2.0
+                    b[t2] -= w / 2.0
+                elif pso_winner == row.away_team:
+                    b[t2] += w / 2.0
+                    b[t1] -= w / 2.0
+            # pure draw: no change to b
+
+    try:
+        r = np.linalg.solve(C, b)
+    except np.linalg.LinAlgError:
+        r = np.full(n, 0.5)
+
+    ratings = {team: float(r[team_to_idx[team]])
+               for team in all_teams}
+
+    result = _build_bracket_result(ratings, all_teams, show_games)
+    result["burnin_count"] = 0
+    return result
+
+# -------------------------------------------------
+# TRIGGER SIMULATION
+# -------------------------------------------------
+if run_btn:
+    with st.spinner("Running simulation..."):
+        if rating_system == "Elo":
+            result = run_simulation(
+                str(start_date), str(end_date), burnin_years, home_adv, decay_rate, regression,
+                k_wc, k_euro, k_copa, k_afcon, k_gold, k_asian,
+                k_wcq, k_nl, k_euroq, k_afconq, k_asianq, k_friendly, k_other
+            )
+        elif rating_system == "Massey":
+            result = run_massey(
+                str(start_date), str(end_date), burnin_years,
+                massey_weighting, massey_years_back, massey_years95, massey_years50,
+                m_wt_friendly, m_wt_cont_qual, m_wt_wcq, m_wt_conf_cup,
+                m_wt_cont_final, m_wt_wc_final,
+                massey_max_score, massey_pso,
+                massey_linear_first, massey_linear_last
+            )
+        elif rating_system == "Colley":
+            result = run_colley(
+                str(start_date), str(end_date), burnin_years,
+                colley_weighting, colley_years_back, colley_years95, colley_years50,
+                c_wt_friendly, c_wt_cont_qual, c_wt_wcq, c_wt_conf_cup,
+                c_wt_cont_final, c_wt_wc_final,
+                colley_pso,
+                colley_linear_first, colley_linear_last
+            )
+
+    if result is None:
+        st.error("Could not load data or no games in selected range.")
+        st.stop()
+    st.session_state["sim_results"] = result
+    st.session_state["rating_system_used"] = rating_system
+
+result = st.session_state.get("sim_results")
+if result is None:
+    st.stop()
+
+ratings       = result["ratings"]
+all_teams     = result["all_teams"]
+group_results = result["group_results"]
+best_third    = result["best_third"]
+f1, f2, fw    = result["final"]
+
+# -------------------------------------------------
+# PAGE HEADER
+# -------------------------------------------------
+st.markdown(get_logo_html("120px"), unsafe_allow_html=True)
+st.markdown('<div class="main-title">WORLD CUP MATCH-MATICS</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="main-subtitle">{start_date} → {end_date}'
+    f' &nbsp;·&nbsp; {result["total_games"]:,} games'
+    f'</div>',
+    unsafe_allow_html=True
+)
+
+if rating_system == "Elo":
+    mc1, mc2 = st.columns(2)
+    mc1.markdown(
+        f'<div class="metric-box"><div class="metric-value">{burnin_years}yr</div>'
+        f'<div class="metric-label">Burn-in Period</div></div>',
+        unsafe_allow_html=True
+    )
+    mc2.markdown(
+        f'<div class="metric-box"><div class="metric-value">{result["burnin_count"]:,}</div>'
+        f'<div class="metric-label">Burn-in Games</div></div>',
+        unsafe_allow_html=True
+    )
+
+st.markdown(
+    f'<div class="winner-banner">'
+    f'<div class="winner-label">🏆 Predicted Tournament Winner</div>'
+    f'<div class="winner-name">{fw}</div>'
+    f'</div>',
+    unsafe_allow_html=True
+)
+
+# -------------------------------------------------
+# TABS
+# -------------------------------------------------
+tab1, tab2, tab3, tab4 = st.tabs(["Rankings", "Groups", "Bracket", "Help"])
+
+# ── RANKINGS TAB ─────────────────────────────────
+with tab1:
+    rankings_col, news_col = st.columns([2, 1])
+
+    with rankings_col:
+        st.markdown('<div class="section-header">RANKINGS</div>', unsafe_allow_html=True)
+
+        sorted_teams = sorted(all_teams, key=lambda t: -ratings.get(t, 1500))
+        rating_system_used = st.session_state.get("rating_system_used", "Elo")
+        fmt = ".4f" if rating_system_used in ("Massey", "Colley") else ".0f"
+
+
+        rows = []
+        displayed = 0
+        for team in sorted_teams:
+            conf = CONFEDERATION_MAP.get(team, "")
+            if conf not in conf_filter:
+                continue
+            displayed += 1
+            rating  = ratings.get(team, 1500)
+            is_top  = displayed <= 10
+            is_wc   = team in WC_TEAMS
+
+            row_style = (
+                "display:flex;align-items:center;padding:6px 12px;border-radius:4px;"
+                "margin-bottom:2px;font-size:0.88rem;width:fit-content;"
+                + ("background:#12120a;border-left:3px solid #f0e040;" if is_top else "")
+            )
+            name_style = "display:inline-block;min-width:200px;" + ("color:#4caf50;font-weight:500;" if is_wc else "")
+
+            rows.append(
+                f'<div style="{row_style}">'
+                f'<span style="width:36px;color:#888;font-size:0.75rem;">{displayed}</span>'
+                f'<span style="{name_style}">{team}</span>'
+                f'<span style="font-family:monospace;color:#f0e040;font-size:0.9rem;">' + format(rating, fmt) + '</span>'
+                f'</div>'
+            )
+
+        st.markdown("".join(rows), unsafe_allow_html=True)
+        st.markdown('<div class="footer"><div style="text-align:center"><small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
+
+
+
+    def clean_html(text):
+        text = re.sub('<.*?>', '', text)
+        return unescape(text)
+
+    with news_col:
+        st.markdown('<div class="section-header">RECENT NEWS</div>', unsafe_allow_html=True)
+
+        # Try multiple feeds in case one is blocked by the host
+        news_items = []
+        feeds_to_try = [
+            #"https://www.espn.com/espn/rss/soccer/news",
+            #"https://feeds.bbci.co.uk/sport/football/rss.xml",
+            "https://www.theguardian.com/football/rss",
+        ]
+        for feed_url in feeds_to_try:
+            try:
+                feed = feedparser.parse(
+                    feed_url,
+                    request_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.5",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                        "Cache-Control": "max-age=0",}
+                )
+                if feed.entries:
+                    news_items = feed.entries[:8]
+                    break
+            except Exception:
+                continue
+
+        if not news_items:
+            st.markdown(
+                '<div style="color:#555;font-size:0.82rem;padding:8px 0;">News unavailable — RSS feed could not be reached from this server.</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            links_html = ""
+            for entry in news_items:
+                title = unescape(re.sub('<.*?>', '', entry.get("title", "")))
+                link  = entry.get("link", "#")
+                links_html += (
+                    f'<a href="{link}" target="_blank" rel="noopener noreferrer" '
+                    f'style="display:block;margin-bottom:14px;color:#e6e6e6;'
+                    f'font-size:0.83rem;text-decoration:none;line-height:1.4;'
+                    f'border-bottom:1px solid #1a1a2e;padding-bottom:10px;">'
+                    f'{title}'
+                    f'</a>'
+                )
+            st.markdown(
+                f'<div style="background:#0a0a0f;padding:12px;border-radius:6px;">{links_html}</div>',
+                unsafe_allow_html=True
+            )
+
+# ── GROUPS TAB ───────────────────────────────────
+with tab2:
+    st.markdown('<div class="section-header">GROUP STAGE RANKINGS</div>', unsafe_allow_html=True)
+
+    best_third_set = {(g, t) for g, t, _ in best_third}
+
+    col_html = ["", "", ""]
+    all_group_cards = []
+
+    for gi, (group_name, team_list) in enumerate(GROUPS.items()):
+        letter = group_name.split()[-1]
+        ranked = group_results[letter]
+
+        rows_html = ""
+        for pos, (team, rating) in enumerate(ranked, 1):
+            if pos <= 2:
+                badge = '<span style="color:#f0e040;font-size:0.65rem;margin-left:5px;font-weight:600;">Q</span>'
+            elif (letter, team) in best_third_set:
+                badge = '<span style="color:#4caf50;font-size:0.65rem;margin-left:5px;font-weight:600;">3rd</span>'
+            else:
+                badge = ""
+
+            name_color = "#aaa" if pos <= 2 else "#666"
+            row_bg     = "background:#13130a;" if pos <= 2 else ""
+
+            rating_system_used = st.session_state.get("rating_system_used", "Elo")
+            fmt_rating = round(rating, 4) if rating_system_used in ("Massey", "Colley") else int(rating)
+
+            rows_html += (
+                '<div style="display:flex;justify-content:space-between;align-items:center;'
+                'padding:5px 8px;border-bottom:1px solid #1a1a2e;' + row_bg + '">'
+                '<span style="color:#888;font-size:0.72rem;width:14px;">' + str(pos) + '</span>'
+                '<span style="flex:1;font-size:0.83rem;color:' + name_color + ';">' + team + badge + '</span>'
+                '<span style="font-family:monospace;font-size:0.8rem;color:#888;">' + str(fmt_rating) + '</span>'
+                '</div>'
+            )
+
+        card_html = (
+            '<div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;'
+            'padding:12px;margin-bottom:10px;">'
+            '<div style="font-family:Bebas Neue,sans-serif;font-size:1rem;'
+            'letter-spacing:0.1em;color:#f0e040;margin-bottom:8px;">GROUP ' + letter + '</div>'
+            + rows_html +
+            '</div>'
+        )
+
+        col_html[gi % 3] += card_html
+        all_group_cards.append(card_html)
+
+    # Desktop: 3 columns. Mobile: single column in alphabetical order via flat list
+    flat_html = "".join(all_group_cards)
+
+    st.markdown(
+        '<style>'
+        '.groups-desktop { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }'
+        '.groups-mobile  { display: none; }'
+        '@media (max-width: 768px) {'
+        '  .groups-desktop { display: none !important; }'
+        '  .groups-mobile  { display: block !important; }'
+        '}'
+        '</style>'
+        '<div class="groups-desktop">'
+        '<div>' + col_html[0] + '</div>'
+        '<div>' + col_html[1] + '</div>'
+        '<div>' + col_html[2] + '</div>'
+        '</div>'
+        '<div class="groups-mobile">' + flat_html + '</div>',
+        unsafe_allow_html=True
+    )
+
+
+    st.markdown('<div class="section-header">BEST 3RD PLACE TEAMS</div>', unsafe_allow_html=True)
+    third_cards = ""
+    for grp, team, rating in best_third:
+        rating_system_used = st.session_state.get("rating_system_used", "Elo")
+        fmt_rating = round(rating, 4) if rating_system_used in ("Massey", "Colley") else int(rating)
+
+        third_cards += (
+            '<div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;'
+            'padding:16px;text-align:center;">'
+            '<div style="font-family:Bebas Neue,sans-serif;font-size:1.3rem;color:#f0e040;letter-spacing:0.05em;">' + team + '</div>'
+            '<div style="font-size:0.72rem;color:#555;text-transform:uppercase;letter-spacing:0.15em;margin-top:2px;">Group ' + grp + ' &middot; ' + str(fmt_rating) + '</div>'
+            '</div>'
+        )
+    st.markdown(
+        '<div class="third-grid">' + third_cards + '</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown('<div class="footer"> <div style="text-align:center"> <small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
+
+# ── BRACKET TAB ──────────────────────────────────
+with tab3:
+    st.markdown('<div class="section-header">TOURNAMENT BRACKET</div>', unsafe_allow_html=True)
+
+    def team_slot(team, winner=False, align="left"):
+        bg     = "#1a1a0a" if winner else "#0f0f18"
+        color  = "#f0e040" if winner else "#888"
+        border = "1px solid #f0e040" if winner else "1px solid #1e1e2e"
+        ta     = "right" if align == "right" else "left"
+        return (
+            '<div class="bracket-slot" style="background:' + bg + ';border:' + border + ';'
+            'border-radius:3px;padding:3px 6px;font-size:0.72rem;color:' + color + ';'
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+            'max-width:130px;min-width:100px;text-align:' + ta + ';">' + team + '</div>'
+        )
+
+    def match_pair(t1, t2, winner, align="left"):
+        gap = "2px"
+        return (
+            '<div style="display:flex;flex-direction:column;gap:' + gap + ';margin:4px 0;">'
+            + team_slot(t1, t1 == winner, align)
+            + team_slot(t2, t2 == winner, align)
+            + '</div>'
+        )
+
+    r32 = result["r32_matches"]
+    r16 = result["r16_matches"]
+    qf  = result["qf_matches"]
+    sf  = result["sf_matches"]
+    b1, b2, bw = result["bronze"]
+    f1, f2, fw = result["final"]
+
+    def col_matches(matches, align="left"):
+        html = '<div style="display:flex;flex-direction:column;justify-content:space-around;flex:1;">'
+        for mn, t1, t2, w in matches:
+            html += match_pair(t1, t2, w, align)
+        html += '</div>'
+        return html
+
+    def connector_col(n, direction="right"):
+        lines = ""
+        for i in range(n):
+            lines += (
+                '<div style="display:flex;flex-direction:column;justify-content:center;flex:1;">'
+                '<div style="border-top:1px solid #333;border-' + direction + ':1px solid #333;'
+                'border-bottom:1px solid #333;height:calc(50% + 6px);margin-bottom:-1px;"></div>'
+                '</div>'
+            )
+        return '<div style="display:flex;flex-direction:column;width:12px;flex-shrink:0;">' + lines + '</div>'
+
+    r32_by_num = {mn: (mn, t1, t2, w) for mn, t1, t2, w in r32}
+    r16_by_num = {mn: (mn, t1, t2, w) for mn, t1, t2, w in r16}
+    qf_by_num  = {mn: (mn, t1, t2, w) for mn, t1, t2, w in qf}
+    sf_by_num  = {mn: (mn, t1, t2, w) for mn, t1, t2, w in sf}
+
+    # Left side top to bottom — pairs that meet in R16 grouped together
+    left_r32  = col_matches([r32_by_num[74], r32_by_num[77],
+                          r32_by_num[73], r32_by_num[75],
+                          r32_by_num[76], r32_by_num[78],
+                          r32_by_num[79], r32_by_num[80]])
+
+    left_r16  = col_matches([r16_by_num[89], r16_by_num[90],
+                          r16_by_num[91], r16_by_num[92]])
+
+    left_qf   = col_matches([qf_by_num[97], qf_by_num[99]])
+    left_sf   = col_matches([sf_by_num[101]])
+
+    # Right side top to bottom
+    right_r32 = col_matches([r32_by_num[83], r32_by_num[84],
+                          r32_by_num[81], r32_by_num[82],
+                          r32_by_num[86], r32_by_num[88],
+                          r32_by_num[85], r32_by_num[87]], "right")
+
+    right_r16 = col_matches([r16_by_num[93], r16_by_num[94],
+                          r16_by_num[95], r16_by_num[96]], "right")
+
+    right_qf  = col_matches([qf_by_num[98], qf_by_num[100]], "right")
+    right_sf  = col_matches([sf_by_num[102]], "right")
+
+    final_html = (
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0 8px;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.8rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;">FINAL</div>'
+        + team_slot(f1, f1 == fw, "left")
+        + team_slot(f2, f2 == fw, "left")
+        + '<div style="font-family:Bebas Neue,sans-serif;font-size:1.4rem;color:#f0e040;margin-top:6px;letter-spacing:0.08em;">CHAMPION</div>'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:1.35rem;color:#f0e040;letter-spacing:0.05em;">' + fw + '</div>'
+        + '<div style="margin-top:12px;border-top:1px solid #1e1e2e;padding-top:8px;width:100%;text-align:center;">'
+        + '<div style="font-family:Bebas Neue,sans-serif;font-size:0.9rem;color:#888;letter-spacing:0.1em;">3RD PLACE</div>'
+        + team_slot(b1, b1 == bw, "left")
+        + team_slot(b2, b2 == bw, "left")
+        + '</div>'
+        + '</div>'
+    )
+
+    bracket_html = (
+        '<div style="display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:12px 0;">'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R32</div>'
+        + left_r32 + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R16</div>'
+        + left_r16 + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">QF</div>'
+        + left_qf + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">SF</div>'
+        + left_sf + '</div>'
+
+        + final_html +
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">SF</div>'
+        + right_sf + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">QF</div>'
+        + right_qf + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R16</div>'
+        + right_r16 + '</div>'
+
+        '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">R32</div>'
         + right_r32 + '</div>'
 
         '</div>'
