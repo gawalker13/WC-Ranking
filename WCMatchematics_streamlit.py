@@ -318,7 +318,7 @@ with st.sidebar:
         start_date = st.date_input("Start", value=pd.to_datetime("2022-01-01"),
                                    min_value=pd.to_datetime("1990-01-01"))
     with c2:
-        end_date = st.date_input("End", value=pd.to_datetime("2026-05-31"),
+        end_date = st.date_input("End", value=pd.to_datetime("2026-06-27"),
                                  min_value=pd.to_datetime("1990-01-01"))
 
     # --- ELO SETTINGS ---
