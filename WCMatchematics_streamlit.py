@@ -1317,7 +1317,7 @@ st.markdown(
 # -------------------------------------------------
 # TABS
 # -------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs(["Rankings", "Groups", "Bracket", "Help"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Rankings", "Groups", "Bracket", "Help", "Actual Bracket"])
 
 # ── RANKINGS TAB ─────────────────────────────────
 with tab1:
@@ -1642,6 +1642,186 @@ with tab3:
 
     st.markdown(
         '<div class="bracket-wrap">' + bracket_html + '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="footer"> <div style="text-align:center"> <small>Created By: Garrett Walker</small></div>', unsafe_allow_html=True)
+
+# ── ACTUAL BRACKET TAB ───────────────────────────
+with tab5:
+    st.markdown('<div class="section-header">2026 WORLD CUP — ACTUAL KNOCKOUT BRACKET</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:0.82rem;color:#555;margin-bottom:1rem;">'
+        'Real teams that qualified for the Round of 32. Higher-rated team always advances.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # Actual R32 matchups — display names
+    # Left side order (top→bottom):  74, 77, 73, 75, 76, 78, 79, 80
+    # Right side order (top→bottom): 83, 84, 81, 82, 86, 88, 85, 87
+    ACTUAL_R32 = {
+        73: ("Canada",        "South Africa"),
+        74: ("Germany",       "Paraguay"),
+        75: ("Netherlands",   "Morocco"),
+        76: ("Brazil",        "Japan"),
+        77: ("France",        "Sweden"),
+        78: ("Ivory Coast",   "Norway"),
+        79: ("Mexico",        "Ecuador"),
+        80: ("England",       "DR Congo"),
+        81: ("USA",           "Bosnia & Herz."),
+        82: ("Belgium",       "Senegal"),
+        83: ("Portugal",      "Croatia"),
+        84: ("Spain",         "Austria"),
+        85: ("Switzerland",   "Algeria"),
+        86: ("Argentina",     "Cape Verde"),
+        87: ("Colombia",      "Ghana"),
+        88: ("Australia",     "Egypt"),
+    }
+
+    # Map shortened display names → keys in the ratings dict
+    _RKEY = {
+        "USA":            "United States",
+        "Bosnia & Herz.": "Bosnia and Herzegovina",
+        "Ivory Coast":    "Ivory Coast",
+        "DR Congo":       "DR Congo",
+    }
+
+    def _get_rating(team):
+        return ratings.get(_RKEY.get(team, team), 1500.0)
+
+    def _sim_a(t1, t2):
+        return t1 if _get_rating(t1) >= _get_rating(t2) else t2
+
+    # Compute R32 winners
+    _ar32_w = {mn: _sim_a(t1, t2) for mn, (t1, t2) in ACTUAL_R32.items()}
+
+    # R16
+    _ar16_pairs = [(89,74,77),(90,73,75),(91,76,78),(92,79,80),
+                   (93,83,84),(94,81,82),(95,86,88),(96,85,87)]
+    _ar16_m, _ar16_w = {}, {}
+    for mn, m1, m2 in _ar16_pairs:
+        t1, t2 = _ar32_w[m1], _ar32_w[m2]
+        _ar16_m[mn] = (t1, t2)
+        _ar16_w[mn] = _sim_a(t1, t2)
+
+    # QF
+    _aqf_pairs = [(97,89,90),(98,93,94),(99,91,92),(100,95,96)]
+    _aqf_m, _aqf_w = {}, {}
+    for mn, m1, m2 in _aqf_pairs:
+        t1, t2 = _ar16_w[m1], _ar16_w[m2]
+        _aqf_m[mn] = (t1, t2)
+        _aqf_w[mn] = _sim_a(t1, t2)
+
+    # SF
+    _asf_pairs = [(101,97,98),(102,99,100)]
+    _asf_m, _asf_w, _asf_l = {}, {}, {}
+    for mn, m1, m2 in _asf_pairs:
+        t1, t2 = _aqf_w[m1], _aqf_w[m2]
+        _asf_m[mn] = (t1, t2)
+        w = _sim_a(t1, t2)
+        _asf_w[mn] = w
+        _asf_l[mn] = t2 if w == t1 else t1
+
+    # Final & bronze
+    _af1, _af2   = _asf_w[101], _asf_w[102]
+    _ab1, _ab2   = _asf_l[101], _asf_l[102]
+    _afw         = _sim_a(_af1, _af2)
+    _abw         = _sim_a(_ab1, _ab2)
+
+    # ── Rendering helpers ────────────────────────
+    def _slot(team, winner=False, align="left"):
+        bg     = "#1a1a0a" if winner else "#0f0f18"
+        color  = "#f0e040" if winner else "#888"
+        border = "1px solid #f0e040" if winner else "1px solid #1e1e2e"
+        ta     = "right" if align == "right" else "left"
+        return (
+            '<div class="bracket-slot" style="background:' + bg + ';border:' + border + ';'
+            'border-radius:3px;padding:3px 6px;font-size:0.72rem;color:' + color + ';'
+            'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+            'max-width:130px;min-width:100px;text-align:' + ta + ';">' + team + '</div>'
+        )
+
+    def _mpair(t1, t2, w, align="left"):
+        return (
+            '<div style="display:flex;flex-direction:column;gap:2px;margin:4px 0;">'
+            + _slot(t1, t1 == w, align)
+            + _slot(t2, t2 == w, align)
+            + '</div>'
+        )
+
+    def _col(pairs_dict, winners_dict, match_nums, align="left"):
+        html = '<div style="display:flex;flex-direction:column;justify-content:space-around;flex:1;">'
+        for mn in match_nums:
+            t1, t2 = pairs_dict[mn]
+            html += _mpair(t1, t2, winners_dict[mn], align)
+        html += '</div>'
+        return html
+
+    def _col_r32_actual(match_nums, align="left"):
+        html = '<div style="display:flex;flex-direction:column;justify-content:space-around;flex:1;">'
+        for mn in match_nums:
+            t1, t2 = ACTUAL_R32[mn]
+            html += _mpair(t1, t2, _ar32_w[mn], align)
+        html += '</div>'
+        return html
+
+    _left_r32  = _col_r32_actual([74, 77, 73, 75, 76, 78, 79, 80])
+    _left_r16  = _col(_ar16_m, _ar16_w, [89, 90, 91, 92])
+    _left_qf   = _col(_aqf_m,  _aqf_w,  [97, 99])
+    _left_sf   = _col(_asf_m,  _asf_w,  [101])
+
+    _right_r32 = _col_r32_actual([83, 84, 81, 82, 86, 88, 85, 87], "right")
+    _right_r16 = _col(_ar16_m, _ar16_w, [93, 94, 95, 96], "right")
+    _right_qf  = _col(_aqf_m,  _aqf_w,  [98, 100], "right")
+    _right_sf  = _col(_asf_m,  _asf_w,  [102], "right")
+
+    _final_html = (
+        '<div style="display:flex;flex-direction:column;align-items:center;'
+        'justify-content:center;gap:6px;padding:0 8px;">'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:0.8rem;color:#888;'
+        'letter-spacing:0.1em;margin-bottom:4px;">FINAL</div>'
+        + _slot(_af1, _af1 == _afw, "left")
+        + _slot(_af2, _af2 == _afw, "left")
+        + '<div style="font-family:Bebas Neue,sans-serif;font-size:1.4rem;color:#f0e040;'
+        'margin-top:6px;letter-spacing:0.08em;">CHAMPION</div>'
+        '<div style="font-family:Bebas Neue,sans-serif;font-size:1.35rem;color:#f0e040;'
+        'letter-spacing:0.05em;">' + _afw + '</div>'
+        + '<div style="margin-top:12px;border-top:1px solid #1e1e2e;padding-top:8px;'
+        'width:100%;text-align:center;">'
+        + '<div style="font-family:Bebas Neue,sans-serif;font-size:0.9rem;color:#888;'
+        'letter-spacing:0.1em;">3RD PLACE</div>'
+        + _slot(_ab1, _ab1 == _abw, "left")
+        + _slot(_ab2, _ab2 == _abw, "left")
+        + '</div>'
+        + '</div>'
+    )
+
+    def _round_col(label, content):
+        return (
+            '<div style="display:flex;flex-direction:column;align-items:stretch;gap:0;">'
+            '<div style="font-family:Bebas Neue,sans-serif;font-size:0.7rem;color:#888;'
+            'letter-spacing:0.1em;margin-bottom:4px;text-align:center;width:100%;">'
+            + label + '</div>'
+            + content + '</div>'
+        )
+
+    _actual_bracket_html = (
+        '<div style="display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:12px 0;">'
+        + _round_col("R32", _left_r32)
+        + _round_col("R16", _left_r16)
+        + _round_col("QF",  _left_qf)
+        + _round_col("SF",  _left_sf)
+        + _final_html
+        + _round_col("SF",  _right_sf)
+        + _round_col("QF",  _right_qf)
+        + _round_col("R16", _right_r16)
+        + _round_col("R32", _right_r32)
+        + '</div>'
+    )
+
+    st.markdown(
+        '<div class="bracket-wrap">' + _actual_bracket_html + '</div>',
         unsafe_allow_html=True
     )
 
@@ -2795,7 +2975,7 @@ st.markdown(
 # -------------------------------------------------
 # TABS
 # -------------------------------------------------
-tab1, tab2, tab3, tab4 = st.tabs(["Rankings", "Groups", "Bracket", "Help"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Rankings", "Groups", "Bracket", "Actual Bracket", "Help"])
 
 # ── RANKINGS TAB ─────────────────────────────────
 with tab1:
@@ -3362,7 +3542,7 @@ with tab4:
     <div style="background:#0f0f18;border:1px solid #1e1e2e;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
     <div style="color:#e8e4dc;font-size:0.85rem;font-weight:500;margin-bottom:4px;">Bracket tab</div>
     <div style="color:#888;font-size:0.82rem;line-height:1.6;">
-    The full knockout bracket from Round of 32 to the Final. In every match the higher-rated
+    The full knockout bracket from Round of 32 to the Final. In every match the higher-ratedf
     team wins — there is no probability involved. The predicted champion is shown at the
     centre of the bracket and at the top of the page.
     </div></div>
